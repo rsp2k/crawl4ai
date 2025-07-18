@@ -237,20 +237,29 @@ async def get_markdown(
     body: MarkdownRequest,
     _td: Dict = Depends(token_dep),
 ):
-    if not body.url.startswith(("http://", "https://")):
-        raise HTTPException(
-            400, "URL must be absolute and start with http/https")
-    markdown = await handle_markdown_request(
-        body.url, body.f, body.q, body.c, config
-    )
-    return JSONResponse({
-        "url": body.url,
-        "filter": body.f,
-        "query": body.q,
-        "cache": body.c,
-        "markdown": markdown,
-        "success": True
-    })
+    """
+    Extracts clean markdown content from web pages using various filtering strategies.
+    Supports content filtering (fit/raw/bm25/llm) and query-based extraction for targeted content.
+    """
+    try:
+        if not body.url.startswith(("http://", "https://")):
+            raise HTTPException(
+                400, "URL must be absolute and start with http/https")
+        markdown = await handle_markdown_request(
+            body.url, body.filter_type, body.query, body.cache_version, config
+        )
+        return JSONResponse({
+            "url": body.url,
+            "filter": body.filter_type,
+            "query": body.query,
+            "cache": body.cache_version,
+            "markdown": markdown,
+            "success": True
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to extract markdown: {str(e)}")
 
 
 @app.post("/html")
