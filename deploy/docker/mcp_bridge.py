@@ -30,9 +30,10 @@ def mcp_template(name: str | None = None):
         return fn
     return deco
 
-def mcp_tool(name: str | None = None):
+def mcp_tool(name: str | None = None, **annotations):
     def deco(fn):
         fn.__mcp_kind__, fn.__mcp_name__ = "tool", name
+        fn.__mcp_annotations__ = annotations
         return fn
     return deco
 
@@ -116,10 +117,22 @@ def attach_mcp(
     async def _list_tools() -> List[t.Tool]:
         out = []
         for k, (proxy, orig_fn) in tools.items():
-            desc   = getattr(orig_fn, "__mcp_description__", None) or inspect.getdoc(orig_fn) or ""
+            desc = getattr(orig_fn, "__mcp_description__", None) or inspect.getdoc(orig_fn) or ""
             schema = getattr(orig_fn, "__mcp_schema__", None) or _schema(_body_model(orig_fn))
+            annotations = getattr(orig_fn, "__mcp_annotations__", {})
+            
+            # Convert annotations to proper MCP format
+            mcp_annotations = None
+            if annotations:
+                mcp_annotations = t.ToolAnnotations(**annotations)
+            
             out.append(
-                t.Tool(name=k, description=desc, inputSchema=schema)
+                t.Tool(
+                    name=k, 
+                    description=desc, 
+                    inputSchema=schema,
+                    annotations=mcp_annotations
+                )
             )
         return out
              

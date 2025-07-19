@@ -11,10 +11,33 @@ class CrawlRequest(BaseModel):
 
 class MarkdownRequest(BaseModel):
     """Request body for the /md endpoint."""
-    url: str                    = Field(...,  description="Absolute http/https URL to fetch")
-    filter_type: FilterType     = Field(FilterType.FIT, description="Content‑filter strategy: fit, raw, bm25, or llm")
-    query: Optional[str]        = Field(None,  description="Query string used by BM25/LLM filters")
-    cache_version: Optional[str] = Field("0",   description="Cache‑bust / revision counter")
+    url: str = Field(
+        ..., 
+        description="Absolute http/https URL to fetch",
+        examples=["https://example.com", "https://docs.python.org"]
+    )
+    filter_type: FilterType = Field(
+        FilterType.FIT, 
+        description="Content filtering strategy",
+        json_schema_extra={
+            "enum_descriptions": {
+                "raw": "Extract all content without filtering",
+                "fit": "Smart content filtering for readability", 
+                "bm25": "Use BM25 algorithm with query for targeted extraction",
+                "llm": "Use LLM-based filtering with query for intelligent extraction"
+            }
+        }
+    )
+    query: Optional[str] = Field(
+        None, 
+        description="Search query for BM25/LLM filters (required for bm25 and llm filter types)",
+        examples=["python tutorial", "installation guide", "API documentation"]
+    )
+    cache_version: Optional[str] = Field(
+        "0", 
+        description="Cache version identifier for cache invalidation",
+        examples=["0", "1", "v2.1"]
+    )
 
 
 class RawCode(BaseModel):

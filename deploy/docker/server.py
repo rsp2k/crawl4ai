@@ -231,7 +231,13 @@ async def config_dump(raw: RawCode):
 
 @app.post("/md")
 @limiter.limit(config["rate_limiting"]["default_limit"])
-@mcp_tool("md")
+@mcp_tool(
+    "md",
+    title="Markdown Extractor",
+    readOnlyHint=True,
+    openWorldHint=True,
+    idempotentHint=True
+)
 async def get_markdown(
     request: Request,
     body: MarkdownRequest,
