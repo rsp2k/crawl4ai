@@ -37,6 +37,12 @@ def mcp_tool(name: str | None = None, **annotations):
         return fn
     return deco
 
+def mcp_prompt(name: str | None = None):
+    def deco(fn):
+        fn.__mcp_kind__, fn.__mcp_name__ = "prompt", name
+        return fn
+    return deco
+
 # ── HTTP‑proxy helper for FastAPI endpoints ─────────────────────
 def _make_http_proxy(base_url: str, route):
     method = list(route.methods - {"HEAD", "OPTIONS"})[0]
@@ -80,6 +86,7 @@ def attach_mcp(
     tools: Dict[str, Tuple[Callable, Callable]] = {}
     resources: Dict[str, Callable] = {}
     templates: Dict[str, Callable] = {}
+    prompts: Dict[str, Callable] = {}
 
     # register decorated FastAPI routes
     for route in app.routes:
@@ -100,6 +107,8 @@ def attach_mcp(
             resources[key] = fn
         if kind == "template":
             templates[key] = fn
+        if kind == "prompt":
+            prompts[key] = fn
 
     # helpers for JSON‑Schema
     def _schema(model: type[BaseModel] | None) -> dict:
@@ -177,6 +186,38 @@ def attach_mcp(
             )
             for k, f in templates.items()
         ]
+
+    @mcp.list_prompts()
+    async def _list_prompts() -> List[t.Prompt]:
+        return [
+            t.Prompt(
+                name=k,
+                description=inspect.getdoc(f) or "",
+                arguments=[]  # We'll add arguments support if needed
+            )
+            for k, f in prompts.items()
+        ]
+
+    @mcp.get_prompt()
+    async def _get_prompt(name: str, arguments: Dict | None = None) -> t.GetPromptResult:
+        if name not in prompts:
+            raise HTTPException(404, "prompt not found")
+        
+        prompt_fn = prompts[name]
+        prompt_data = prompt_fn(**(arguments or {}))
+        
+        # Convert our prompt data to MCP format
+        messages = []
+        if isinstance(prompt_data, dict) and "messages" in prompt_data:
+            for msg in prompt_data["messages"]:
+                content = [t.TextContent(type="text", text=msg["content"])]
+                messages.append(t.PromptMessage(role=msg["role"], content=content))
+        else:
+            # Fallback for simple string prompts
+            content = [t.TextContent(type="text", text=str(prompt_data))]
+            messages.append(t.PromptMessage(role="user", content=content))
+        
+        return t.GetPromptResult(messages=messages)
 
     init_opts = InitializationOptions(
         server_name=server_name,

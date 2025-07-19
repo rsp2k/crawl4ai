@@ -55,7 +55,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from job import init_job_router
 
-from mcp_bridge import attach_mcp, mcp_resource, mcp_template, mcp_tool
+from mcp_bridge import attach_mcp, mcp_resource, mcp_template, mcp_tool, mcp_prompt
 
 import ast
 import crawl4ai as _c4
@@ -981,6 +981,428 @@ def get_filter_guide():
         ]
     }
     return filter_guide
+
+
+# ═══════════════════════════════════════════════════════════════
+# MCP PROMPTS - Reusable prompt templates for LLMs
+# ═══════════════════════════════════════════════════════════════
+
+@mcp_prompt("browser_config_mobile")
+def get_mobile_browser_prompt():
+    """
+    Prompt template for configuring mobile device simulation in browser_config.
+    Helps LLMs understand how to properly configure mobile viewport and user agents.
+    """
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": """Configure a mobile browser setup for crawling a responsive website. 
+
+I need to simulate an iPhone device and capture content optimized for mobile viewing. Please provide a complete configuration that includes:
+
+1. Mobile viewport dimensions (iPhone-like)
+2. Appropriate mobile user agent
+3. Device scale factor for retina display
+4. Mobile-specific crawler settings
+
+Show me the exact browser_config and crawler_config parameters to use with the Crawl4AI MCP tools."""
+            },
+            {
+                "role": "assistant", 
+                "content": """Here's a complete mobile configuration for Crawl4AI:
+
+```json
+{
+  "url": "https://your-website.com",
+  "browser_config": {
+    "headless": true,
+    "viewport": {
+      "width": 375,
+      "height": 667,
+      "deviceScaleFactor": 2,
+      "isMobile": true
+    },
+    "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+  },
+  "crawler_config": {
+    "wait_for": "css:.mobile-content-loaded",
+    "page_timeout": 45000,
+    "excluded_tags": ["script", "noscript"],
+    "word_count_threshold": 15
+  }
+}
+```
+
+Key mobile considerations:
+- **Viewport**: 375x667 matches iPhone 6/7/8 dimensions
+- **deviceScaleFactor**: 2 for retina display simulation
+- **User Agent**: Authentic iPhone Safari string
+- **Mobile flag**: `isMobile: true` enables touch events
+- **Longer timeout**: Mobile networks can be slower
+- **Content waiting**: Target mobile-specific CSS classes"""
+            }
+        ]
+    }
+
+@mcp_prompt("browser_config_performance")
+def get_performance_browser_prompt():
+    """
+    Prompt template for configuring browser settings for performance monitoring and testing.
+    Helps LLMs set up configurations for measuring page load times and performance metrics.
+    """
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": """I need to measure website performance and load times using Crawl4AI. Help me configure the browser and crawler settings for accurate performance monitoring.
+
+Requirements:
+- Measure actual load times (not cached)
+- Capture performance metrics
+- Ensure realistic browser conditions
+- Handle JavaScript performance timing APIs
+
+What browser_config and crawler_config should I use?"""
+            },
+            {
+                "role": "assistant",
+                "content": """Here's a performance monitoring configuration:
+
+```json
+{
+  "url": "https://target-website.com",
+  "browser_config": {
+    "headless": true,
+    "java_script_enabled": true,
+    "light_mode": false,
+    "viewport": {"width": 1920, "height": 1080},
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  },
+  "crawler_config": {
+    "cache_mode": "bypass",
+    "page_timeout": 30000,
+    "wait_for": "css:body",
+    "session_id": "perf-test-session"
+  }
+}
+```
+
+For JavaScript performance measurement, use the `execute_js` tool:
+
+```javascript
+// Measure page load performance
+const perfData = performance.getEntriesByType('navigation')[0];
+const metrics = {
+  loadTime: perfData.loadEventEnd - perfData.fetchStart,
+  domReady: perfData.domContentLoadedEventEnd - perfData.fetchStart,
+  firstByte: perfData.responseStart - perfData.fetchStart,
+  domComplete: perfData.domComplete - perfData.fetchStart
+};
+return metrics;
+```
+
+Key performance settings:
+- **cache_mode: "bypass"**: Fresh load every time
+- **light_mode: false**: Full rendering for accurate timing
+- **Minimal wait_for**: Don't add artificial delays
+- **JavaScript enabled**: Access to performance APIs"""
+            }
+        ]
+    }
+
+@mcp_prompt("crawler_config_privacy")
+def get_privacy_crawler_prompt():
+    """
+    Prompt template for configuring privacy-focused crawling with proxies and minimal tracking.
+    Helps LLMs understand how to set up secure, anonymous crawling configurations.
+    """
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": """I need to crawl content while maintaining privacy and anonymity. Help me configure Crawl4AI for:
+
+1. Proxy usage (SOCKS5 or HTTP)
+2. Minimal browser fingerprinting
+3. No caching of sensitive content
+4. Text-only extraction for privacy
+5. JavaScript disabled for security
+
+Show me the complete configuration."""
+            },
+            {
+                "role": "assistant",
+                "content": """Here's a privacy-focused configuration:
+
+```json
+{
+  "url": "https://sensitive-content.com",
+  "browser_config": {
+    "headless": true,
+    "proxy": "socks5://localhost:9050",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; rv:91.0) Gecko/20100101 Firefox/91.0",
+    "java_script_enabled": false,
+    "light_mode": true,
+    "text_mode": true,
+    "ignore_https_errors": true
+  },
+  "crawler_config": {
+    "cache_mode": "disabled",
+    "page_timeout": 120000,
+    "excluded_tags": ["script", "style", "img", "video", "audio", "iframe"],
+    "only_text": true,
+    "extraction_strategy": "NoExtractionStrategy"
+  }
+}
+```
+
+Privacy features explained:
+- **SOCKS5 proxy**: Routes through Tor or VPN
+- **Minimal user agent**: Generic Firefox string
+- **JavaScript disabled**: Prevents tracking scripts
+- **Text mode**: Reduces browser fingerprinting
+- **Cache disabled**: No local storage of sensitive data
+- **Extended timeout**: Proxies can be slower
+- **Aggressive filtering**: Remove all media and scripts
+- **Text-only extraction**: Maximum privacy
+
+For Tor usage, ensure you have Tor running locally on port 9050."""
+            }
+        ]
+    }
+
+@mcp_prompt("crawler_config_ecommerce")
+def get_ecommerce_crawler_prompt():
+    """
+    Prompt template for configuring e-commerce and product page crawling.
+    Helps LLMs set up configurations for extracting product information, prices, and reviews.
+    """
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": """I want to extract product information from e-commerce websites including prices, descriptions, and availability. 
+
+Help me configure Crawl4AI to:
+- Handle dynamic pricing that loads via JavaScript
+- Wait for product images to load
+- Extract structured product data
+- Handle anti-bot measures gracefully
+- Focus on main product content
+
+What configuration should I use?"""
+            },
+            {
+                "role": "assistant",
+                "content": """Here's an e-commerce optimized configuration:
+
+```json
+{
+  "url": "https://shop.example.com/product/123",
+  "filter_type": "bm25",
+  "query": "price cost shipping availability stock description specifications",
+  "browser_config": {
+    "headless": true,
+    "viewport": {"width": 1366, "height": 768},
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "java_script_enabled": true
+  },
+  "crawler_config": {
+    "wait_for": "css:.product-images-loaded, .price-loaded",
+    "page_timeout": 60000,
+    "excluded_tags": ["nav", "footer", "reviews", "recommendations", "ads"],
+    "css_selector": ".product-details, .pricing-info, .product-description",
+    "cache_mode": "bypass",
+    "word_count_threshold": 10
+  }
+}
+```
+
+For dynamic pricing, use `execute_js` to extract specific data:
+
+```javascript
+// Extract dynamic product data
+const productData = {
+  price: document.querySelector('.price')?.textContent,
+  availability: document.querySelector('.availability')?.textContent,
+  title: document.querySelector('h1')?.textContent,
+  description: document.querySelector('.description')?.textContent,
+  images: Array.from(document.querySelectorAll('.product-image img')).map(img => img.src)
+};
+return productData;
+```
+
+E-commerce specific features:
+- **BM25 filter**: Target price/product keywords
+- **JavaScript enabled**: Dynamic pricing support  
+- **Cache bypass**: Always get fresh prices
+- **Specific selectors**: Focus on product areas
+- **Image wait**: Ensure media loads completely
+- **Extended timeout**: Handle slow e-commerce sites"""
+            }
+        ]
+    }
+
+@mcp_prompt("advanced_spa_config")
+def get_spa_configuration_prompt():
+    """
+    Prompt template for configuring Single Page Application (SPA) crawling.
+    Helps LLMs understand complex JavaScript application interaction patterns.
+    """
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": """I need to crawl a complex Single Page Application (SPA) that loads content dynamically. The app has:
+
+- Client-side routing
+- Lazy-loaded components  
+- Dynamic data fetching
+- Authentication requirements
+- Complex user interactions needed
+
+Help me configure Crawl4AI to navigate and extract data from this modern web app."""
+            },
+            {
+                "role": "assistant",
+                "content": """Here's a comprehensive SPA configuration:
+
+```json
+{
+  "url": "https://spa-app.com/dashboard",
+  "browser_config": {
+    "headless": false,
+    "java_script_enabled": true,
+    "viewport": {"width": 1920, "height": 1080},
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  },
+  "crawler_config": {
+    "session_id": "spa-session-123",
+    "wait_for": "css:[data-testid='app-ready']",
+    "page_timeout": 90000,
+    "simulation_id": "dashboard-interaction"
+  }
+}
+```
+
+For complex interactions, use `execute_js` with step-by-step navigation:
+
+```javascript
+// SPA Navigation and Data Extraction
+async function extractSPAData() {
+  // Wait for initial app load
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  // Navigate to specific section
+  const navButton = document.querySelector('[data-testid="reports-tab"]');
+  if (navButton) navButton.click();
+  
+  // Wait for route change and content load
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Extract data after navigation
+  const data = {
+    currentRoute: window.location.hash || window.location.pathname,
+    content: document.querySelector('.main-content')?.textContent,
+    dataLoaded: !!document.querySelector('.data-table'),
+    timestamp: new Date().toISOString()
+  };
+  
+  return data;
+}
+
+return await extractSPAData();
+```
+
+SPA-specific considerations:
+- **Non-headless mode**: Some SPAs detect headless browsers
+- **Extended timeouts**: SPAs take time to initialize
+- **Session persistence**: Maintain state across requests
+- **Dynamic waiting**: Wait for app-specific ready signals
+- **Step-by-step interaction**: Handle complex user flows
+- **Route awareness**: Track client-side navigation"""
+            }
+        ]
+    }
+
+@mcp_prompt("documentation_extraction")
+def get_documentation_extraction_prompt():
+    """
+    Prompt template for extracting technical documentation and API references.
+    Helps LLMs configure optimal settings for clean, structured documentation crawling.
+    """
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": """I need to extract technical documentation from API reference sites and developer docs. I want:
+
+- Clean, well-structured markdown output
+- Code examples preserved with formatting
+- Navigation and sidebar content removed
+- Focus on main documentation content
+- Proper handling of syntax highlighting
+
+How should I configure Crawl4AI for documentation extraction?"""
+            },
+            {
+                "role": "assistant",
+                "content": """Here's an optimal documentation extraction configuration:
+
+```json
+{
+  "url": "https://api-docs.service.com/reference",
+  "filter_type": "fit",
+  "query": "API endpoints methods parameters examples documentation",
+  "browser_config": {
+    "headless": true,
+    "viewport": {"width": 1200, "height": 800},
+    "user_agent": "Mozilla/5.0 Documentation Bot"
+  },
+  "crawler_config": {
+    "wait_for": "css:.api-reference-loaded, .documentation-content",
+    "excluded_tags": ["nav", "footer", "aside", "sidebar", "cookie-banner", "ads"],
+    "word_count_threshold": 15,
+    "extraction_strategy": "NoExtractionStrategy",
+    "css_selector": ".api-documentation, .main-content, .docs-content",
+    "preserve_code": true
+  }
+}
+```
+
+For comprehensive site documentation crawling:
+
+```json
+{
+  "url": "https://docs.framework.com/getting-started",
+  "filter_type": "fit",
+  "browser_config": {
+    "headless": true,
+    "viewport": {"width": 1200, "height": 1000}
+  },
+  "crawler_config": {
+    "wait_for": "css:.docs-loaded",
+    "excluded_tags": ["nav", "footer", "search", "toc"],
+    "css_selector": "main, .content, .documentation",
+    "follow_links": true,
+    "max_depth": 2,
+    "link_pattern": "/docs/"
+  }
+}
+```
+
+Documentation-specific features:
+- **FIT filter**: Removes navigation, preserves main content
+- **Code preservation**: Maintains syntax highlighting
+- **Specific selectors**: Target documentation containers
+- **Link following**: Crawl related documentation pages
+- **Clean exclusions**: Remove common doc site elements
+- **Wider viewport**: Better rendering of code examples
+- **Conservative word threshold**: Include short code snippets"""
+            }
+        ]
+    }
 
 
 # attach MCP layer (adds /mcp/ws, /mcp/sse, /mcp/schema)
