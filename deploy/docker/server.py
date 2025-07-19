@@ -244,8 +244,72 @@ async def get_markdown(
     _td: Dict = Depends(token_dep),
 ):
     """
-    Extracts clean markdown content from web pages using various filtering strategies.
-    Supports content filtering (fit/raw/bm25/llm) and query-based extraction for targeted content.
+    🔄 **Web-to-Markdown Converter & Content Extractor**
+    
+    Converts any webpage into clean, readable markdown format with intelligent content filtering.
+    Perfect for extracting articles, documentation, blog posts, and structured content for AI processing.
+    
+    **📋 CORE FUNCTIONALITY:**
+    • Fetches webpage content and converts HTML to clean markdown
+    • Applies intelligent filtering to remove ads, navigation, and boilerplate
+    • Extracts main content while preserving formatting and structure
+    • Returns structured JSON with original URL, filter settings, and markdown content
+    
+    **🎛️ FILTER STRATEGIES (filter_type):**
+    
+    **"fit"** (RECOMMENDED) - Smart content extraction using AI algorithms
+    ├─ Removes ads, navigation, sidebars, and promotional content
+    ├─ Identifies and preserves main article/content areas 
+    ├─ Best for: Blog posts, news articles, documentation, clean reading
+    └─ Query parameter: Not required (but can enhance results)
+    
+    **"raw"** - Complete page content without filtering
+    ├─ Converts entire HTML to markdown with no content removal
+    ├─ Preserves all page elements including navigation and ads
+    ├─ Best for: Complete page archival, custom filtering later
+    └─ Query parameter: Ignored
+    
+    **"bm25"** - Keyword-based content filtering using BM25 algorithm
+    ├─ Extracts content sections most relevant to your search query
+    ├─ Uses advanced search ranking to find topically relevant content
+    ├─ Best for: Research, extracting specific information topics
+    └─ Query parameter: REQUIRED - provide keywords you're looking for
+    
+    **"llm"** - AI-powered intelligent content selection
+    ├─ Uses large language models to understand content relevance  
+    ├─ Applies contextual understanding for complex filtering needs
+    ├─ Best for: Complex content analysis, context-aware extraction
+    └─ Query parameter: REQUIRED - describe what content you want
+    
+    **⚙️ CONFIGURATION OPTIONS:**
+    
+    **browser_config** - Controls browser behavior:
+    • headless: true/false (show browser window)
+    • viewport: {width: 1920, height: 1080} (screen size)
+    • user_agent: "custom string" (browser identification)
+    • proxy: "http://proxy:8080" (proxy server)
+    
+    **crawler_config** - Controls page processing:
+    • wait_for: "css:.content-loaded" (wait for elements)
+    • page_timeout: 60000 (max wait time in ms)
+    • excluded_tags: ["nav", "footer"] (HTML tags to remove)
+    • cache_mode: "enabled/disabled/bypass" (caching strategy)
+    
+    **💡 COMMON USE CASES:**
+    
+    📰 **News/Blog Articles**: Use filter_type="fit" for clean, readable content
+    📚 **Documentation**: Use filter_type="fit" with excluded_tags=["nav","sidebar"] 
+    🔍 **Research**: Use filter_type="bm25" with query="specific topic keywords"
+    🤖 **AI Analysis**: Use filter_type="llm" with query="extract technical specifications"
+    📊 **Data Collection**: Use filter_type="raw" for complete page capture
+    
+    **✅ SUCCESS RESPONSE:**
+    Returns JSON with: url, filter, query, cache, markdown (content), success=true
+    
+    **❌ ERROR HANDLING:**
+    • Invalid URLs return 400 error
+    • Network failures return 500 with error details
+    • Timeout issues automatically handled with retries
     """
     try:
         if not body.url.startswith(("http://", "https://")):
