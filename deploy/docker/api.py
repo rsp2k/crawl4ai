@@ -168,7 +168,9 @@ async def handle_markdown_request(
     filter_type: FilterType,
     query: Optional[str] = None,
     cache: str = "0",
-    config: Optional[dict] = None
+    config: Optional[dict] = None,
+    browser_config: Optional[dict] = None,
+    crawler_config: Optional[dict] = None
 ) -> str:
     """Handle markdown generation requests."""
     try:
@@ -194,14 +196,25 @@ async def handle_markdown_request(
 
         cache_mode = CacheMode.ENABLED if cache == "1" else CacheMode.WRITE_ONLY
 
-        async with AsyncWebCrawler() as crawler:
+        # Build browser config with defaults and user overrides
+        browser_cfg = BrowserConfig()
+        if browser_config:
+            browser_cfg = BrowserConfig.from_kwargs(browser_config)
+
+        # Build crawler config with defaults and user overrides  
+        crawler_cfg_dict = {
+            "markdown_generator": md_generator,
+            "scraping_strategy": LXMLWebScrapingStrategy(),
+            "cache_mode": cache_mode
+        }
+        if crawler_config:
+            crawler_cfg_dict.update(crawler_config)
+        crawler_cfg = CrawlerRunConfig.from_kwargs(crawler_cfg_dict)
+
+        async with AsyncWebCrawler(config=browser_cfg) as crawler:
             result = await crawler.arun(
                 url=decoded_url,
-                config=CrawlerRunConfig(
-                    markdown_generator=md_generator,
-                    scraping_strategy=LXMLWebScrapingStrategy(),
-                    cache_mode=cache_mode
-                )
+                config=crawler_cfg
             )
             
             if not result.success:

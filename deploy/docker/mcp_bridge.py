@@ -17,22 +17,45 @@ import mcp.types as t
 from mcp.server.lowlevel.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 
+# ── Simple logging helper (removed complex MCP logging to fix ASGI issues) ──
+
+# ── Global registries for standalone functions ──────────────────
+_standalone_resources = {}
+_standalone_prompts = {}
+_standalone_templates = {}
+
 # ── opt‑in decorators ───────────────────────────────────────────
 def mcp_resource(name: str | None = None):
     def deco(fn):
         fn.__mcp_kind__, fn.__mcp_name__ = "resource", name
+        # Register standalone resource functions
+        key = name or fn.__name__
+        _standalone_resources[key] = fn
         return fn
     return deco
 
 def mcp_template(name: str | None = None):
     def deco(fn):
         fn.__mcp_kind__, fn.__mcp_name__ = "template", name
+        # Register standalone template functions
+        key = name or fn.__name__
+        _standalone_templates[key] = fn
         return fn
     return deco
 
-def mcp_tool(name: str | None = None):
+def mcp_tool(name: str | None = None, **annotations):
     def deco(fn):
         fn.__mcp_kind__, fn.__mcp_name__ = "tool", name
+        fn.__mcp_annotations__ = annotations
+        return fn
+    return deco
+
+def mcp_prompt(name: str | None = None):
+    def deco(fn):
+        fn.__mcp_kind__, fn.__mcp_name__ = "prompt", name
+        # Register standalone prompt functions
+        key = name or fn.__name__
+        _standalone_prompts[key] = fn
         return fn
     return deco
 
@@ -79,6 +102,7 @@ def attach_mcp(
     tools: Dict[str, Tuple[Callable, Callable]] = {}
     resources: Dict[str, Callable] = {}
     templates: Dict[str, Callable] = {}
+    prompts: Dict[str, Callable] = {}
 
     # register decorated FastAPI routes
     for route in app.routes:
@@ -99,10 +123,23 @@ def attach_mcp(
             resources[key] = fn
         if kind == "template":
             templates[key] = fn
+        if kind == "prompt":
+            prompts[key] = fn
+
+    # Also register standalone decorated functions (resources, prompts, templates)
+    # These are captured by the decorators when the module is imported
+    resources.update(_standalone_resources)
+    prompts.update(_standalone_prompts)
+    templates.update(_standalone_templates)
 
     # helpers for JSON‑Schema
     def _schema(model: type[BaseModel] | None) -> dict:
-        return {"type": "object"} if model is None else model.model_json_schema()
+        if model is None:
+            return {"type": "object"}
+        
+        # Generate schema using field names (not aliases) for better MCP tool discovery
+        schema = model.model_json_schema(by_alias=False)
+        return schema
 
     def _body_model(fn: Callable) -> type[BaseModel] | None:
         for p in inspect.signature(fn).parameters.values():
@@ -116,10 +153,22 @@ def attach_mcp(
     async def _list_tools() -> List[t.Tool]:
         out = []
         for k, (proxy, orig_fn) in tools.items():
-            desc   = getattr(orig_fn, "__mcp_description__", None) or inspect.getdoc(orig_fn) or ""
+            desc = getattr(orig_fn, "__mcp_description__", None) or inspect.getdoc(orig_fn) or ""
             schema = getattr(orig_fn, "__mcp_schema__", None) or _schema(_body_model(orig_fn))
+            annotations = getattr(orig_fn, "__mcp_annotations__", {})
+            
+            # Convert annotations to proper MCP format
+            mcp_annotations = None
+            if annotations:
+                mcp_annotations = t.ToolAnnotations(**annotations)
+            
             out.append(
-                t.Tool(name=k, description=desc, inputSchema=schema)
+                t.Tool(
+                    name=k, 
+                    description=desc, 
+                    inputSchema=schema,
+                    annotations=mcp_annotations
+                )
             )
         return out
              
@@ -136,12 +185,21 @@ def attach_mcp(
             # map server‑side errors into MCP "text/error" payloads
             err = {"error": exc.status_code, "detail": exc.detail}
             return [t.TextContent(type = "text", text=json.dumps(err))]
+        except Exception as exc:
+            err = {"error": 500, "detail": "Internal server error"}
+            return [t.TextContent(type = "text", text=json.dumps(err))]
+            
         return [t.TextContent(type = "text", text=json.dumps(res, default=str))]
 
     @mcp.list_resources()
     async def _list_resources() -> List[t.Resource]:
         return [
-            t.Resource(name=k, description=inspect.getdoc(f) or "", mime_type="application/json")
+            t.Resource(
+                name=k, 
+                uri=f"resource://{k}",
+                description=inspect.getdoc(f) or "", 
+                mimeType="application/json"
+            )
             for k, f in resources.items()
         ]
 
@@ -149,7 +207,12 @@ def attach_mcp(
     async def _read_resource(name: str) -> List[t.TextContent]:
         if name not in resources:
             raise HTTPException(404, "resource not found")
-        res = resources[name]()
+        
+        try:
+            res = resources[name]()
+        except Exception as exc:
+            raise HTTPException(500, f"Resource access failed: {exc}")
+            
         return [t.TextContent(type = "text", text=json.dumps(res, default=str))]
 
     @mcp.list_resource_templates()
@@ -164,6 +227,43 @@ def attach_mcp(
             )
             for k, f in templates.items()
         ]
+
+    @mcp.list_prompts()
+    async def _list_prompts() -> List[t.Prompt]:
+        return [
+            t.Prompt(
+                name=k,
+                description=inspect.getdoc(f) or "",
+                arguments=[]  # We'll add arguments support if needed
+            )
+            for k, f in prompts.items()
+        ]
+
+    @mcp.get_prompt()
+    async def _get_prompt(name: str, arguments: Dict | None = None) -> t.GetPromptResult:
+        if name not in prompts:
+            raise HTTPException(404, "prompt not found")
+        
+        try:
+            prompt_fn = prompts[name]
+            prompt_data = prompt_fn(**(arguments or {}))
+        except Exception as exc:
+            raise HTTPException(500, f"Prompt generation failed: {exc}")
+        
+        # Convert our prompt data to MCP format
+        messages = []
+        if isinstance(prompt_data, dict) and "messages" in prompt_data:
+            for msg in prompt_data["messages"]:
+                # Create a single TextContent object, not a list
+                content = t.TextContent(type="text", text=msg["content"])
+                messages.append(t.PromptMessage(role=msg["role"], content=content))
+        else:
+            # Fallback for simple string prompts
+            content = t.TextContent(type="text", text=str(prompt_data))
+            messages.append(t.PromptMessage(role="user", content=content))
+        
+        return t.GetPromptResult(messages=messages)
+
 
     init_opts = InitializationOptions(
         server_name=server_name,
@@ -223,10 +323,15 @@ def attach_mcp(
 
     @app.get(f"{base}/sse")
     async def _mcp_sse(request: Request):
-        async with sse.connect_sse(
-            request.scope, request.receive, request._send  # starlette ASGI primitives
-        ) as (read_stream, write_stream):
-            await mcp.run(read_stream, write_stream, init_opts)
+        try:
+            async with sse.connect_sse(
+                request.scope, request.receive, request._send
+            ) as (read_stream, write_stream):
+                await mcp.run(read_stream, write_stream, init_opts)
+        except Exception as e:
+            # Log the error but don't crash the entire application
+            print(f"SSE connection error: {e}")
+            raise HTTPException(500, f"SSE connection failed: {str(e)}")
 
     # client → server frames are POSTed here
     app.mount(f"{base}/messages", app=sse.handle_post_message)
@@ -238,6 +343,7 @@ def attach_mcp(
             "tools": [x.model_dump() for x in await _list_tools()],
             "resources": [x.model_dump() for x in await _list_resources()],
             "resource_templates": [x.model_dump() for x in await _list_templates()],
+            "prompts": [x.model_dump() for x in await _list_prompts()],
         })
 
 

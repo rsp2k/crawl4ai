@@ -303,6 +303,8 @@ python tests/mcp/test_mcp_socket.py
 
 Access the MCP tool schemas at `http://localhost:11235/mcp/schema` for detailed information on each tool's parameters and capabilities.
 
+**Enhanced Parameter Names**: As of v0.7.1, MCP tools use descriptive parameter names (e.g., `filter_type`, `query`, `cache_version` for the `md` tool) for better LLM understanding. The original short names (`f`, `q`, `c`) are still supported for backwards compatibility.
+
 ---
 
 ## Additional API Endpoints
