@@ -348,8 +348,63 @@ async def generate_html(
     _td: Dict = Depends(token_dep),
 ):
     """
-    Crawls the URL, preprocesses the raw HTML for schema extraction, and returns the processed HTML.
-    Use when you need sanitized HTML structures for building schemas or further processing.
+    🌐 **HTML Structure Extractor & Schema Builder**
+    
+    Extracts and preprocesses raw HTML content from webpages for structured data analysis.
+    Perfect for AI schema generation, data extraction pipelines, and HTML structure analysis.
+    
+    **📋 CORE FUNCTIONALITY:**
+    • Fetches complete webpage HTML content 
+    • Preprocesses HTML for optimal schema extraction
+    • Sanitizes and normalizes HTML structure
+    • Removes problematic elements that interfere with parsing
+    • Returns clean, structured HTML ready for AI processing
+    
+    **🎯 PRIMARY USE CASES:**
+    
+    🤖 **AI Schema Generation**: Extract HTML structure for LLMs to build data schemas
+    🏗️ **Data Pipeline Input**: Clean HTML for structured data extraction workflows  
+    📊 **Content Structure Analysis**: Understand page layout and element hierarchy
+    🔍 **Element Discovery**: Find specific HTML patterns and structures
+    📝 **Template Analysis**: Study page templates and recurring patterns
+    
+    **⚙️ CONFIGURATION OPTIONS:**
+    
+    **browser_config** - Controls browser behavior:
+    • headless: true/false (show browser for debugging)
+    • viewport: {width: 1920, height: 1080} (affects responsive layouts)
+    • user_agent: "custom agent" (for specific content access)
+    • java_script_enabled: true/false (run JS for dynamic content)
+    
+    **crawler_config** - Controls HTML processing:
+    • wait_for: "css:.content-loaded" (ensure dynamic content loads)
+    • page_timeout: 60000 (max load time in milliseconds)
+    • excluded_tags: ["script", "style"] (remove unwanted elements)
+    • cache_mode: "enabled/disabled/bypass" (caching strategy)
+    
+    **💡 WHEN TO USE HTML vs MD TOOL:**
+    
+    ✅ **Use HTML tool when:**
+    • Building data extraction schemas
+    • Analyzing page structure and layout
+    • Need complete HTML with all elements
+    • Creating scrapers or parsers
+    • Studying responsive design implementations
+    
+    ❌ **Use MD tool instead when:**
+    • You want readable content for humans/AI
+    • Need clean text without HTML markup
+    • Extracting articles or documentation
+    • Content analysis rather than structure analysis
+    
+    **✅ SUCCESS RESPONSE:**
+    Returns JSON with: html (preprocessed content), url, success=true
+    
+    **🔧 PREPROCESSING INCLUDES:**
+    • Normalized whitespace and formatting
+    • Removed problematic script and style elements  
+    • Standardized attribute formatting
+    • Optimized for machine parsing and analysis
     """
     # Build browser config with defaults and user overrides
     browser_cfg = BrowserConfig()
@@ -386,9 +441,79 @@ async def generate_screenshot(
     _td: Dict = Depends(token_dep),
 ):
     """
-    Capture a full-page PNG screenshot of the specified URL, waiting an optional delay before capture,
-    Use when you need an image snapshot of the rendered page. Its recommened to provide an output path to save the screenshot.
-    Then in result instead of the screenshot you will get a path to the saved file.
+    📸 **Website Screenshot & Visual Capture Tool**
+    
+    Captures high-quality, full-page PNG screenshots of any webpage with precise timing control.
+    Perfect for visual testing, design analysis, documentation, and automated monitoring.
+    
+    **📋 CORE FUNCTIONALITY:**
+    • Takes full-page screenshots (entire scrollable content, not just viewport)
+    • Waits for page load completion and optional custom delays
+    • Supports custom timing for dynamic content loading
+    • Returns base64-encoded PNG data or saves to specified file path
+    • Handles responsive layouts and high-DPI displays
+    
+    **🎯 PRIMARY USE CASES:**
+    
+    🖼️ **Visual Documentation**: Capture page layouts for documentation
+    🧪 **Visual Testing**: Compare page renders across different configurations  
+    📊 **Design Analysis**: Study layout, colors, and visual hierarchy
+    🔍 **QA & Monitoring**: Automated visual regression testing
+    📱 **Responsive Testing**: Capture mobile vs desktop layouts
+    🎨 **Portfolio Creation**: Generate website previews and thumbnails
+    
+    **⚙️ CONFIGURATION OPTIONS:**
+    
+    **screenshot_wait_for** (seconds) - Additional delay before capture:
+    • 0.0: Capture immediately after page load
+    • 2.0: Wait 2 seconds for animations/dynamic content
+    • 5.0: Extended wait for slow-loading elements
+    
+    **output_path** (optional) - Where to save the screenshot:
+    • If provided: Returns {"success": true, "path": "/absolute/path/to/file.png"}
+    • If omitted: Returns {"success": true, "screenshot": "base64_data"}
+    
+    **browser_config** - Controls visual output:
+    • headless: true/false (false shows actual browser during capture)
+    • viewport: {width: 1920, height: 1080} (affects responsive layout)
+    • device_scale_factor: 2 (for high-DPI/retina displays)
+    • user_agent: "mobile agent" (for mobile-specific rendering)
+    
+    **crawler_config** - Controls page behavior:
+    • wait_for: "css:.page-loaded" (wait for specific elements)
+    • page_timeout: 60000 (max time to wait for page load)
+    • cache_mode: "bypass" (get fresh render, not cached)
+    
+    **📐 RESPONSIVE TESTING EXAMPLES:**
+    
+    📱 **Mobile Screenshot**:
+    ```json
+    {
+      "browser_config": {
+        "viewport": {"width": 375, "height": 667},
+        "user_agent": "iPhone Safari"
+      }
+    }
+    ```
+    
+    🖥️ **Desktop Screenshot**:
+    ```json
+    {
+      "browser_config": {
+        "viewport": {"width": 1920, "height": 1080}
+      }
+    }
+    ```
+    
+    **✅ SUCCESS RESPONSE:**
+    • With output_path: {"success": true, "path": "/saved/screenshot.png"}
+    • Without output_path: {"success": true, "screenshot": "base64_png_data"}
+    
+    **💡 PRO TIPS:**
+    • Use output_path to avoid large base64 data in API responses
+    • Set screenshot_wait_for=3.0 for pages with animations
+    • Use headless=false for debugging screenshot timing issues
+    • Combine with specific viewport settings for responsive testing
     """
     # Build browser config with defaults and user overrides
     browser_cfg = BrowserConfig()
@@ -433,9 +558,89 @@ async def generate_pdf(
     _td: Dict = Depends(token_dep),
 ):
     """
-    Generate a PDF document of the specified URL,
-    Use when you need a printable or archivable snapshot of the page. It is recommended to provide an output path to save the PDF.
-    Then in result instead of the PDF you will get a path to the saved file.
+    📄 **Website PDF Generator & Document Archival Tool**
+    
+    Converts any webpage into a high-quality PDF document with print-optimized formatting.
+    Perfect for creating printable documents, archival snapshots, and offline content distribution.
+    
+    **📋 CORE FUNCTIONALITY:**
+    • Generates print-quality PDF documents from web content
+    • Applies browser print CSS and media queries for optimal formatting
+    • Handles multi-page content with proper page breaks
+    • Returns base64-encoded PDF data or saves to specified file path
+    • Maintains text selectability and link functionality in PDF
+    
+    **🎯 PRIMARY USE CASES:**
+    
+    📋 **Document Archival**: Create permanent records of web content
+    🖨️ **Print-Ready Reports**: Generate documents for offline reading/printing
+    📚 **Content Distribution**: Share web content as portable PDF files
+    📄 **Legal Documentation**: Archive web pages for compliance/evidence
+    📖 **Research Papers**: Convert web articles to academic-style documents
+    💼 **Business Reports**: Create professional documents from web data
+    
+    **⚙️ CONFIGURATION OPTIONS:**
+    
+    **output_path** (optional) - Where to save the PDF:
+    • If provided: Returns {"success": true, "path": "/absolute/path/to/file.pdf"}
+    • If omitted: Returns {"success": true, "pdf": "base64_pdf_data"}
+    
+    **browser_config** - Controls PDF generation:
+    • headless: true/false (false for debugging PDF layout)
+    • viewport: {width: 1200, height: 800} (affects content layout)
+    • user_agent: "print agent" (some sites serve print-specific CSS)
+    
+    **crawler_config** - Controls page behavior:
+    • wait_for: "css:.content-ready" (ensure all content loads)
+    • page_timeout: 90000 (PDFs may take longer to generate)
+    • excluded_tags: ["nav", "footer"] (clean up content for print)
+    • cache_mode: "bypass" (get fresh content for archival)
+    
+    **📐 PDF FORMATTING EXAMPLES:**
+    
+    📊 **Report-Style PDF**:
+    ```json
+    {
+      "browser_config": {
+        "viewport": {"width": 1200, "height": 1600}
+      },
+      "crawler_config": {
+        "excluded_tags": ["nav", "sidebar", "ads", "footer"],
+        "wait_for": "css:.main-content"
+      }
+    }
+    ```
+    
+    📰 **Article PDF**:
+    ```json
+    {
+      "browser_config": {
+        "viewport": {"width": 800, "height": 1200}
+      },
+      "crawler_config": {
+        "excluded_tags": ["header", "nav", "aside", "footer"],
+        "css_selector": ".article-content, .post-content"
+      }
+    }
+    ```
+    
+    **🖨️ PDF QUALITY FEATURES:**
+    • Respects CSS @media print rules for optimized formatting
+    • Maintains hyperlinks as clickable elements in PDF
+    • Preserves images with appropriate resolution
+    • Handles page breaks intelligently for readability
+    • Includes proper margins and typography for print
+    
+    **✅ SUCCESS RESPONSE:**
+    • With output_path: {"success": true, "path": "/saved/document.pdf"}
+    • Without output_path: {"success": true, "pdf": "base64_pdf_data"}
+    
+    **💡 PRO TIPS:**
+    • Use output_path to avoid large base64 data in API responses
+    • Exclude navigation elements for cleaner PDF documents
+    • Wait for dynamic content to load before PDF generation
+    • Use wider viewports (1200px+) for better print formatting
+    • Test with headless=false to debug PDF layout issues
     """
     # Build browser config with defaults and user overrides
     browser_cfg = BrowserConfig()
@@ -584,7 +789,129 @@ async def crawl(
     _td: Dict = Depends(token_dep),
 ):
     """
-    Crawl a list of URLs and return the results as JSON.
+    🕷️ **Multi-URL Web Crawler & Batch Processor**
+    
+    Efficiently crawls multiple URLs in parallel and returns comprehensive results for each page.
+    Perfect for bulk content extraction, site analysis, competitive research, and data collection at scale.
+    
+    **📋 CORE FUNCTIONALITY:**
+    • Processes multiple URLs simultaneously for faster execution
+    • Returns complete CrawlResult objects with all extracted data
+    • Handles failures gracefully with detailed error reporting per URL
+    • Supports consistent browser and crawler configuration across all URLs
+    • Provides structured JSON output for easy integration with data pipelines
+    
+    **🎯 PRIMARY USE CASES:**
+    
+    📊 **Competitive Analysis**: Crawl competitor websites for content comparison
+    🔍 **Site Auditing**: Analyze multiple pages for SEO, performance, or content issues
+    📈 **Market Research**: Collect data from multiple sources for analysis
+    🏗️ **Data Pipeline Input**: Bulk content extraction for downstream processing
+    📚 **Documentation Crawling**: Extract content from multiple documentation pages
+    🌐 **Site Migration**: Backup or migrate content from multiple pages
+    
+    **📝 INPUT FORMAT:**
+    
+    **urls** (required) - Array of URLs to crawl:
+    ```json
+    {
+      "urls": [
+        "https://example.com/page1",
+        "https://example.com/page2", 
+        "https://docs.site.com/guide"
+      ]
+    }
+    ```
+    
+    **⚙️ CONFIGURATION OPTIONS:**
+    
+    **browser_config** (optional) - Applied to all URLs:
+    • headless: true/false (browser visibility)
+    • viewport: {width: 1920, height: 1080} (consistent viewport)
+    • user_agent: "custom agent" (consistent user agent)
+    • proxy: "http://proxy:8080" (use same proxy for all)
+    
+    **crawler_config** (optional) - Applied to all URLs:
+    • wait_for: "css:.content-loaded" (wait condition for all pages)
+    • page_timeout: 60000 (timeout for each URL)
+    • excluded_tags: ["nav", "footer"] (consistent content filtering)
+    • cache_mode: "enabled/disabled/bypass" (caching strategy)
+    
+    **🚀 PERFORMANCE FEATURES:**
+    • **Parallel Processing**: All URLs crawled simultaneously for speed
+    • **Individual Error Handling**: Failed URLs don't stop processing of others
+    • **Resource Pooling**: Efficient browser instance management
+    • **Consistent Configuration**: Same settings applied across all URLs
+    
+    **📋 COMPLETE CRAWL RESULT DATA:**
+    
+    Each URL returns a comprehensive CrawlResult object containing:
+    ```json
+    {
+      "url": "original_url",
+      "html": "full_page_html",
+      "success": true/false,
+      "cleaned_html": "processed_html",
+      "media": {"images": [...], "videos": [...]},
+      "links": {"internal": [...], "external": [...]},
+      "markdown": "extracted_markdown_content", 
+      "metadata": {"title": "...", "description": "..."},
+      "screenshot": "base64_if_requested",
+      "pdf": "pdf_data_if_requested",
+      "js_execution_result": {...},
+      "network_requests": [...],
+      "console_messages": [...],
+      "status_code": 200,
+      "response_headers": {...}
+    }
+    ```
+    
+    **💡 BULK PROCESSING EXAMPLES:**
+    
+    📚 **Documentation Crawling**:
+    ```json
+    {
+      "urls": [
+        "https://docs.api.com/getting-started",
+        "https://docs.api.com/authentication", 
+        "https://docs.api.com/endpoints"
+      ],
+      "crawler_config": {
+        "excluded_tags": ["nav", "sidebar", "footer"],
+        "css_selector": ".documentation-content"
+      }
+    }
+    ```
+    
+    🔍 **Competitive Analysis**:
+    ```json
+    {
+      "urls": [
+        "https://competitor1.com/pricing",
+        "https://competitor2.com/pricing",
+        "https://competitor3.com/pricing"
+      ],
+      "crawler_config": {
+        "wait_for": "css:.pricing-table",
+        "excluded_tags": ["header", "footer", "nav"]
+      }
+    }
+    ```
+    
+    **✅ SUCCESS RESPONSE:**
+    Returns JSON array with CrawlResult object for each URL, maintaining input order
+    
+    **❌ ERROR HANDLING:**
+    • Individual URL failures don't stop batch processing
+    • Each result includes success/error status and detailed error messages
+    • Network timeouts handled gracefully with retry logic
+    • Invalid URLs reported with specific error details
+    
+    **💡 PRO TIPS:**
+    • Limit batch size to 10-20 URLs for optimal performance
+    • Use consistent browser_config for comparable results across URLs
+    • Set appropriate timeouts based on expected page complexity
+    • Consider using cache_mode="bypass" for fresh data collection
     """
     if not crawl_request.urls:
         raise HTTPException(400, "At least one URL required")
