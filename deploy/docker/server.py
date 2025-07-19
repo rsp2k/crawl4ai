@@ -252,7 +252,8 @@ async def get_markdown(
             raise HTTPException(
                 400, "URL must be absolute and start with http/https")
         markdown = await handle_markdown_request(
-            body.url, body.filter_type, body.query, body.cache_version, config
+            body.url, body.filter_type, body.query, body.cache_version, config,
+            body.browser_config, body.crawler_config
         )
         return JSONResponse({
             "url": body.url,
@@ -286,9 +287,18 @@ async def generate_html(
     Crawls the URL, preprocesses the raw HTML for schema extraction, and returns the processed HTML.
     Use when you need sanitized HTML structures for building schemas or further processing.
     """
-    cfg = CrawlerRunConfig()
-    async with AsyncWebCrawler(config=BrowserConfig()) as crawler:
-        results = await crawler.arun(url=body.url, config=cfg)
+    # Build browser config with defaults and user overrides
+    browser_cfg = BrowserConfig()
+    if body.browser_config:
+        browser_cfg = BrowserConfig.from_kwargs(body.browser_config)
+
+    # Build crawler config with defaults and user overrides
+    crawler_cfg = CrawlerRunConfig()
+    if body.crawler_config:
+        crawler_cfg = CrawlerRunConfig.from_kwargs(body.crawler_config)
+
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        results = await crawler.arun(url=body.url, config=crawler_cfg)
     raw_html = results[0].html
     from crawl4ai.utils import preprocess_html_for_schema
     processed_html = preprocess_html_for_schema(raw_html)
@@ -316,10 +326,22 @@ async def generate_screenshot(
     Use when you need an image snapshot of the rendered page. Its recommened to provide an output path to save the screenshot.
     Then in result instead of the screenshot you will get a path to the saved file.
     """
-    cfg = CrawlerRunConfig(
-        screenshot=True, screenshot_wait_for=body.screenshot_wait_for)
-    async with AsyncWebCrawler(config=BrowserConfig()) as crawler:
-        results = await crawler.arun(url=body.url, config=cfg)
+    # Build browser config with defaults and user overrides
+    browser_cfg = BrowserConfig()
+    if body.browser_config:
+        browser_cfg = BrowserConfig.from_kwargs(body.browser_config)
+
+    # Build crawler config with screenshot requirements and user overrides
+    crawler_cfg_dict = {
+        "screenshot": True,
+        "screenshot_wait_for": body.screenshot_wait_for
+    }
+    if body.crawler_config:
+        crawler_cfg_dict.update(body.crawler_config)
+    crawler_cfg = CrawlerRunConfig.from_kwargs(crawler_cfg_dict)
+
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        results = await crawler.arun(url=body.url, config=crawler_cfg)
     screenshot_data = results[0].screenshot
     if body.output_path:
         abs_path = os.path.abspath(body.output_path)
@@ -351,9 +373,19 @@ async def generate_pdf(
     Use when you need a printable or archivable snapshot of the page. It is recommended to provide an output path to save the PDF.
     Then in result instead of the PDF you will get a path to the saved file.
     """
-    cfg = CrawlerRunConfig(pdf=True)
-    async with AsyncWebCrawler(config=BrowserConfig()) as crawler:
-        results = await crawler.arun(url=body.url, config=cfg)
+    # Build browser config with defaults and user overrides
+    browser_cfg = BrowserConfig()
+    if body.browser_config:
+        browser_cfg = BrowserConfig.from_kwargs(body.browser_config)
+
+    # Build crawler config with PDF requirements and user overrides
+    crawler_cfg_dict = {"pdf": True}
+    if body.crawler_config:
+        crawler_cfg_dict.update(body.crawler_config)
+    crawler_cfg = CrawlerRunConfig.from_kwargs(crawler_cfg_dict)
+
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        results = await crawler.arun(url=body.url, config=crawler_cfg)
     pdf_data = results[0].pdf
     if body.output_path:
         abs_path = os.path.abspath(body.output_path)
@@ -423,9 +455,19 @@ async def execute_js(
         ```
 
     """
-    cfg = CrawlerRunConfig(js_code=body.scripts)
-    async with AsyncWebCrawler(config=BrowserConfig()) as crawler:
-        results = await crawler.arun(url=body.url, config=cfg)
+    # Build browser config with defaults and user overrides
+    browser_cfg = BrowserConfig()
+    if body.browser_config:
+        browser_cfg = BrowserConfig.from_kwargs(body.browser_config)
+
+    # Build crawler config with JS requirements and user overrides
+    crawler_cfg_dict = {"js_code": body.scripts}
+    if body.crawler_config:
+        crawler_cfg_dict.update(body.crawler_config)
+    crawler_cfg = CrawlerRunConfig.from_kwargs(crawler_cfg_dict)
+
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        results = await crawler.arun(url=body.url, config=crawler_cfg)
     # Return JSON-serializable dict of the first CrawlResult
     data = results[0].model_dump()
     return JSONResponse(data)
@@ -665,6 +707,280 @@ async def get_context(
         ]
 
     return JSONResponse(results)
+
+
+@mcp_resource("config_guide")
+def get_config_guide():
+    """
+    Comprehensive guide for configuring Crawl4AI browser and crawler settings.
+    Provides examples and best practices for all MCP tools.
+    """
+    guide = {
+        "title": "Crawl4AI Configuration Guide",
+        "description": "Complete guide for browser_config and crawler_config parameters",
+        "browser_config": {
+            "description": "Browser configuration controls how the browser instance behaves",
+            "common_options": {
+                "headless": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Run browser without GUI. Set to false for debugging.",
+                    "examples": [True, False]
+                },
+                "viewport": {
+                    "type": "object",
+                    "description": "Browser window dimensions",
+                    "examples": [
+                        {"width": 1920, "height": 1080},
+                        {"width": 1366, "height": 768},
+                        {"width": 375, "height": 667}  # Mobile
+                    ]
+                },
+                "user_agent": {
+                    "type": "string",
+                    "description": "Custom user agent string",
+                    "examples": [
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)"
+                    ]
+                },
+                "proxy": {
+                    "type": "string",
+                    "description": "Proxy server URL",
+                    "examples": [
+                        "http://proxy.example.com:8080",
+                        "socks5://user:pass@proxy:1080"
+                    ]
+                },
+                "java_script_enabled": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Enable/disable JavaScript execution",
+                    "examples": [True, False]
+                }
+            }
+        },
+        "crawler_config": {
+            "description": "Crawler configuration controls crawling behavior and content processing",
+            "common_options": {
+                "cache_mode": {
+                    "type": "string",
+                    "default": "enabled",
+                    "description": "Caching strategy for crawled content",
+                    "examples": ["enabled", "disabled", "bypass", "read_only", "write_only"]
+                },
+                "wait_for": {
+                    "type": "string",
+                    "description": "CSS selector or condition to wait for before processing",
+                    "examples": [
+                        "css:.main-content",
+                        "css:#dynamic-data",
+                        "css:.loading-complete"
+                    ]
+                },
+                "page_timeout": {
+                    "type": "number",
+                    "default": 60000,
+                    "description": "Maximum time to wait for page load (milliseconds)",
+                    "examples": [30000, 60000, 120000]
+                },
+                "excluded_tags": {
+                    "type": "array",
+                    "description": "HTML tags to remove during processing",
+                    "examples": [
+                        ["script", "style"],
+                        ["nav", "footer", "aside"],
+                        ["ads", "banner", "popup"]
+                    ]
+                },
+                "extraction_strategy": {
+                    "type": "string",
+                    "description": "Content extraction strategy",
+                    "examples": [
+                        "NoExtractionStrategy",
+                        "LLMExtractionStrategy",
+                        "CosineStrategy"
+                    ]
+                },
+                "word_count_threshold": {
+                    "type": "number",
+                    "default": 10,
+                    "description": "Minimum words required for content blocks",
+                    "examples": [5, 10, 25]
+                },
+                "only_text": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Extract only text content, remove HTML formatting",
+                    "examples": [True, False]
+                }
+            }
+        },
+        "tool_specific_examples": {
+            "md": {
+                "description": "Markdown extraction with custom filtering",
+                "examples": [
+                    {
+                        "url": "https://docs.python.org",
+                        "filter_type": "fit",
+                        "browser_config": {"headless": True, "viewport": {"width": 1920, "height": 1080}},
+                        "crawler_config": {"wait_for": "css:.main-content", "excluded_tags": ["nav", "footer"]}
+                    }
+                ]
+            },
+            "screenshot": {
+                "description": "Screenshot capture with custom viewport",
+                "examples": [
+                    {
+                        "url": "https://example.com",
+                        "browser_config": {"headless": False, "viewport": {"width": 1920, "height": 1080}},
+                        "crawler_config": {"wait_for": "css:.page-loaded", "screenshot_wait_for": 3.0}
+                    }
+                ]
+            },
+            "execute_js": {
+                "description": "JavaScript execution with session management",
+                "examples": [
+                    {
+                        "url": "https://app.example.com",
+                        "scripts": ["document.title", "localStorage.getItem('user')"],
+                        "browser_config": {"headless": False, "java_script_enabled": True},
+                        "crawler_config": {"session_id": "js-session", "wait_for": "css:.app-ready"}
+                    }
+                ]
+            }
+        },
+        "best_practices": [
+            "Use headless=False for debugging and development",
+            "Set appropriate viewport dimensions for responsive testing",
+            "Use wait_for to ensure dynamic content loads before processing",
+            "Configure cache_mode based on content freshness requirements",
+            "Exclude unnecessary tags to improve processing speed",
+            "Set reasonable timeouts based on page complexity"
+        ]
+    }
+    return guide
+
+
+@mcp_resource("filter_guide")
+def get_filter_guide():
+    """
+    Detailed guide for content filtering strategies and FIT markdown processing.
+    Explains how to use different filter types effectively.
+    """
+    filter_guide = {
+        "title": "Crawl4AI Content Filtering Guide",
+        "description": "Understanding filter types and FIT markdown for optimal content extraction",
+        "filter_types": {
+            "raw": {
+                "description": "Extract all content without any filtering",
+                "use_cases": [
+                    "When you need complete page content",
+                    "For comprehensive data collection",
+                    "When building custom filtering logic"
+                ],
+                "example": {
+                    "filter_type": "raw",
+                    "query": None,
+                    "result": "Complete HTML converted to markdown with no filtering"
+                }
+            },
+            "fit": {
+                "description": "Smart content filtering for readability (FIT = Filter, Identify, Transform)",
+                "use_cases": [
+                    "Extract main article content",
+                    "Remove navigation, ads, and sidebars",
+                    "Get clean, readable content"
+                ],
+                "how_it_works": [
+                    "Analyzes page structure and content density",
+                    "Identifies main content areas using ML algorithms",
+                    "Removes navigation, ads, and boilerplate content",
+                    "Optimizes for readability and content quality"
+                ],
+                "example": {
+                    "filter_type": "fit",
+                    "query": None,
+                    "result": "Clean main content with ads and navigation removed"
+                }
+            },
+            "bm25": {
+                "description": "BM25 algorithm-based content filtering with query matching",
+                "use_cases": [
+                    "Extract content relevant to specific topics",
+                    "Search-based content filtering",
+                    "When you have specific information needs"
+                ],
+                "requirements": ["query parameter is required"],
+                "example": {
+                    "filter_type": "bm25",
+                    "query": "installation python setup",
+                    "result": "Content sections most relevant to Python installation"
+                }
+            },
+            "llm": {
+                "description": "LLM-powered intelligent content filtering",
+                "use_cases": [
+                    "Complex content understanding",
+                    "Context-aware filtering",
+                    "When you need AI-powered content selection"
+                ],
+                "requirements": [
+                    "query parameter is required",
+                    "LLM configuration must be set up"
+                ],
+                "example": {
+                    "filter_type": "llm",
+                    "query": "Extract technical documentation about API usage",
+                    "result": "AI-filtered content focused on API documentation"
+                }
+            }
+        },
+        "fit_markdown_details": {
+            "description": "FIT (Filter, Identify, Transform) is Crawl4AI's intelligent content extraction system",
+            "benefits": [
+                "Removes ads, navigation, and boilerplate content",
+                "Preserves article structure and formatting",
+                "Optimizes content for AI processing",
+                "Maintains readability and context"
+            ],
+            "technical_details": [
+                "Uses content density analysis",
+                "Applies machine learning for content classification",
+                "Considers semantic structure of HTML",
+                "Balances content quality vs. completeness"
+            ]
+        },
+        "choosing_filters": {
+            "raw": "When you need everything and will filter later",
+            "fit": "When you want clean, readable main content (recommended for most use cases)",
+            "bm25": "When you're looking for specific topics or keywords",
+            "llm": "When you need AI-powered understanding of content relevance"
+        },
+        "advanced_combinations": [
+            {
+                "scenario": "Documentation extraction",
+                "recommendation": {
+                    "filter_type": "fit",
+                    "crawler_config": {
+                        "excluded_tags": ["nav", "footer", "sidebar"],
+                        "wait_for": "css:.main-content"
+                    }
+                }
+            },
+            {
+                "scenario": "Research article processing",
+                "recommendation": {
+                    "filter_type": "bm25",
+                    "query": "methodology results conclusions",
+                    "crawler_config": {
+                        "word_count_threshold": 25
+                    }
+                }
+            }
+        ]
+    }
+    return filter_guide
 
 
 # attach MCP layer (adds /mcp/ws, /mcp/sse, /mcp/schema)

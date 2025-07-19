@@ -61,6 +61,28 @@ class MarkdownRequest(BaseModel):
         description="Cache version identifier for cache invalidation",
         examples=["0", "1", "v2.1"]
     )
+    browser_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Browser configuration options (headless, viewport, proxy, etc.)",
+        examples=[
+            {},
+            {"headless": False},
+            {"viewport": {"width": 1920, "height": 1080}},
+            {"proxy": "http://proxy:8080", "headless": True},
+            {"user_agent": "Mozilla/5.0 Custom Agent", "java_script_enabled": False}
+        ]
+    )
+    crawler_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Crawler behavior configuration (cache mode, extraction strategy, etc.)",
+        examples=[
+            {},
+            {"cache_mode": "bypass"},
+            {"extraction_strategy": "NoExtractionStrategy"},
+            {"wait_for": "css:.main-content", "page_timeout": 30000},
+            {"excluded_tags": ["nav", "footer"], "word_count_threshold": 10}
+        ]
+    )
 
 
 class RawCode(BaseModel):
@@ -72,6 +94,26 @@ class HTMLRequest(BaseModel):
         ..., 
         description="Absolute http/https URL to fetch and process",
         examples=["https://example.com", "https://docs.python.org", "https://github.com"]
+    )
+    browser_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Browser configuration options (headless, viewport, proxy, etc.)",
+        examples=[
+            {},
+            {"headless": False},
+            {"viewport": {"width": 1920, "height": 1080}},
+            {"proxy": "http://proxy:8080", "headless": True}
+        ]
+    )
+    crawler_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Crawler behavior configuration (cache mode, extraction strategy, etc.)",
+        examples=[
+            {},
+            {"cache_mode": "bypass"},
+            {"wait_for": "css:.main-content"},
+            {"excluded_tags": ["nav", "footer"], "only_text": True}
+        ]
     )
     
 class ScreenshotRequest(BaseModel):
@@ -93,6 +135,26 @@ class ScreenshotRequest(BaseModel):
         description="Local file path to save screenshot (optional, returns base64 if not provided)",
         examples=["/tmp/screenshot.png", "./output/page.png"]
     )
+    browser_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Browser configuration options (headless, viewport, proxy, etc.)",
+        examples=[
+            {},
+            {"headless": False},
+            {"viewport": {"width": 1920, "height": 1080}},
+            {"user_agent": "Mozilla/5.0 Custom Screenshot Agent"}
+        ]
+    )
+    crawler_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Crawler behavior configuration (wait conditions, timeouts, etc.)",
+        examples=[
+            {},
+            {"wait_for": "css:.main-content"},
+            {"page_timeout": 30000},
+            {"excluded_tags": ["script", "style"]}
+        ]
+    )
 
 class PDFRequest(BaseModel):
     """Request body for the /pdf endpoint."""
@@ -105,6 +167,26 @@ class PDFRequest(BaseModel):
         None,
         description="Local file path to save PDF (optional, returns base64 if not provided)", 
         examples=["/tmp/document.pdf", "./output/page.pdf"]
+    )
+    browser_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Browser configuration options (headless, viewport, proxy, etc.)",
+        examples=[
+            {},
+            {"headless": True},
+            {"viewport": {"width": 1920, "height": 1080}},
+            {"user_agent": "Mozilla/5.0 PDF Generator"}
+        ]
+    )
+    crawler_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Crawler behavior configuration (wait conditions, timeouts, etc.)",
+        examples=[
+            {},
+            {"wait_for": "css:.main-content"},
+            {"page_timeout": 30000},
+            {"excluded_tags": ["script", "style"], "only_text": False}
+        ]
     )
 
 
@@ -124,4 +206,24 @@ class JSEndpointRequest(BaseModel):
             ["(() => { return Array.from(document.querySelectorAll('a')).map(a => a.href); })()"]
         ],
         min_length=1
+    )
+    browser_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Browser configuration options (headless, viewport, proxy, etc.)",
+        examples=[
+            {},
+            {"headless": False},
+            {"viewport": {"width": 1920, "height": 1080}},
+            {"java_script_enabled": True, "user_agent": "Mozilla/5.0 JS Executor"}
+        ]
+    )
+    crawler_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Crawler behavior configuration (wait conditions, timeouts, etc.)",
+        examples=[
+            {},
+            {"wait_for": "css:.dynamic-content"},
+            {"page_timeout": 30000},
+            {"simulation_id": "custom-session", "session_id": "js-session"}
+        ]
     )
