@@ -194,7 +194,12 @@ def attach_mcp(
     @mcp.list_resources()
     async def _list_resources() -> List[t.Resource]:
         return [
-            t.Resource(name=k, description=inspect.getdoc(f) or "", mime_type="application/json")
+            t.Resource(
+                name=k, 
+                uri=f"resource://{k}",
+                description=inspect.getdoc(f) or "", 
+                mimeType="application/json"
+            )
             for k, f in resources.items()
         ]
 
@@ -318,10 +323,15 @@ def attach_mcp(
 
     @app.get(f"{base}/sse")
     async def _mcp_sse(request: Request):
-        async with sse.connect_sse(
-            request.scope, request.receive, request._send  # starlette ASGI primitives
-        ) as (read_stream, write_stream):
-            await mcp.run(read_stream, write_stream, init_opts)
+        try:
+            async with sse.connect_sse(
+                request.scope, request.receive, request._send
+            ) as (read_stream, write_stream):
+                await mcp.run(read_stream, write_stream, init_opts)
+        except Exception as e:
+            # Log the error but don't crash the entire application
+            print(f"SSE connection error: {e}")
+            raise HTTPException(500, f"SSE connection failed: {str(e)}")
 
     # client → server frames are POSTed here
     app.mount(f"{base}/messages", app=sse.handle_post_message)
