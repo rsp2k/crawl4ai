@@ -17,6 +17,8 @@ import mcp.types as t
 from mcp.server.lowlevel.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 
+# ── Simple logging helper (removed complex MCP logging to fix ASGI issues) ──
+
 # ── opt‑in decorators ───────────────────────────────────────────
 def mcp_resource(name: str | None = None):
     def deco(fn):
@@ -158,6 +160,10 @@ def attach_mcp(
             # map server‑side errors into MCP "text/error" payloads
             err = {"error": exc.status_code, "detail": exc.detail}
             return [t.TextContent(type = "text", text=json.dumps(err))]
+        except Exception as exc:
+            err = {"error": 500, "detail": "Internal server error"}
+            return [t.TextContent(type = "text", text=json.dumps(err))]
+            
         return [t.TextContent(type = "text", text=json.dumps(res, default=str))]
 
     @mcp.list_resources()
@@ -171,7 +177,12 @@ def attach_mcp(
     async def _read_resource(name: str) -> List[t.TextContent]:
         if name not in resources:
             raise HTTPException(404, "resource not found")
-        res = resources[name]()
+        
+        try:
+            res = resources[name]()
+        except Exception as exc:
+            raise HTTPException(500, f"Resource access failed: {exc}")
+            
         return [t.TextContent(type = "text", text=json.dumps(res, default=str))]
 
     @mcp.list_resource_templates()
@@ -203,8 +214,11 @@ def attach_mcp(
         if name not in prompts:
             raise HTTPException(404, "prompt not found")
         
-        prompt_fn = prompts[name]
-        prompt_data = prompt_fn(**(arguments or {}))
+        try:
+            prompt_fn = prompts[name]
+            prompt_data = prompt_fn(**(arguments or {}))
+        except Exception as exc:
+            raise HTTPException(500, f"Prompt generation failed: {exc}")
         
         # Convert our prompt data to MCP format
         messages = []
@@ -218,6 +232,7 @@ def attach_mcp(
             messages.append(t.PromptMessage(role="user", content=content))
         
         return t.GetPromptResult(messages=messages)
+
 
     init_opts = InitializationOptions(
         server_name=server_name,
@@ -292,6 +307,7 @@ def attach_mcp(
             "tools": [x.model_dump() for x in await _list_tools()],
             "resources": [x.model_dump() for x in await _list_resources()],
             "resource_templates": [x.model_dump() for x in await _list_templates()],
+            "prompts": [x.model_dump() for x in await _list_prompts()],
         })
 
 
