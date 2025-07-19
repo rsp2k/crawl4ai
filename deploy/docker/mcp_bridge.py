@@ -19,16 +19,27 @@ from mcp.server.models import InitializationOptions
 
 # ── Simple logging helper (removed complex MCP logging to fix ASGI issues) ──
 
+# ── Global registries for standalone functions ──────────────────
+_standalone_resources = {}
+_standalone_prompts = {}
+_standalone_templates = {}
+
 # ── opt‑in decorators ───────────────────────────────────────────
 def mcp_resource(name: str | None = None):
     def deco(fn):
         fn.__mcp_kind__, fn.__mcp_name__ = "resource", name
+        # Register standalone resource functions
+        key = name or fn.__name__
+        _standalone_resources[key] = fn
         return fn
     return deco
 
 def mcp_template(name: str | None = None):
     def deco(fn):
         fn.__mcp_kind__, fn.__mcp_name__ = "template", name
+        # Register standalone template functions
+        key = name or fn.__name__
+        _standalone_templates[key] = fn
         return fn
     return deco
 
@@ -42,6 +53,9 @@ def mcp_tool(name: str | None = None, **annotations):
 def mcp_prompt(name: str | None = None):
     def deco(fn):
         fn.__mcp_kind__, fn.__mcp_name__ = "prompt", name
+        # Register standalone prompt functions
+        key = name or fn.__name__
+        _standalone_prompts[key] = fn
         return fn
     return deco
 
@@ -111,6 +125,12 @@ def attach_mcp(
             templates[key] = fn
         if kind == "prompt":
             prompts[key] = fn
+
+    # Also register standalone decorated functions (resources, prompts, templates)
+    # These are captured by the decorators when the module is imported
+    resources.update(_standalone_resources)
+    prompts.update(_standalone_prompts)
+    templates.update(_standalone_templates)
 
     # helpers for JSON‑Schema
     def _schema(model: type[BaseModel] | None) -> dict:
