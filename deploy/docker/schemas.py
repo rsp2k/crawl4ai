@@ -5,19 +5,40 @@ from utils import FilterType
 
 
 class CrawlRequest(BaseModel):
-    urls: List[str] = Field(min_length=1, max_length=100)
-    browser_config: Optional[Dict] = Field(default_factory=dict)
-    crawler_config: Optional[Dict] = Field(default_factory=dict)
+    """Request body for the /crawl endpoint."""
+    urls: List[str] = Field(
+        ...,
+        min_length=1, 
+        max_length=100,
+        description="List of absolute http/https URLs to crawl",
+        examples=[
+            ["https://example.com"],
+            ["https://docs.python.org", "https://github.com/python"],
+            ["https://site1.com", "https://site2.com", "https://site3.com"]
+        ]
+    )
+    browser_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Browser configuration options (headless, viewport, etc.)",
+        examples=[{}, {"headless": False}, {"viewport": {"width": 1920, "height": 1080}}]
+    )
+    crawler_config: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Crawler behavior configuration (cache mode, extraction strategy, etc.)",
+        examples=[{}, {"cache_mode": "bypass"}, {"extraction_strategy": "NoExtractionStrategy"}]
+    )
 
 class MarkdownRequest(BaseModel):
     """Request body for the /md endpoint."""
+    model_config = {"populate_by_name": True}
     url: str = Field(
         ..., 
         description="Absolute http/https URL to fetch",
         examples=["https://example.com", "https://docs.python.org"]
     )
     filter_type: FilterType = Field(
-        FilterType.FIT, 
+        FilterType.FIT,
+        alias="f", 
         description="Content filtering strategy",
         json_schema_extra={
             "enum_descriptions": {
@@ -29,12 +50,14 @@ class MarkdownRequest(BaseModel):
         }
     )
     query: Optional[str] = Field(
-        None, 
+        None,
+        alias="q",
         description="Search query for BM25/LLM filters (required for bm25 and llm filter types)",
         examples=["python tutorial", "installation guide", "API documentation"]
     )
     cache_version: Optional[str] = Field(
-        "0", 
+        "0",
+        alias="c",
         description="Cache version identifier for cache invalidation",
         examples=["0", "1", "v2.1"]
     )
@@ -44,21 +67,61 @@ class RawCode(BaseModel):
     code: str
 
 class HTMLRequest(BaseModel):
-    url: str
+    """Request body for the /html endpoint."""
+    url: str = Field(
+        ..., 
+        description="Absolute http/https URL to fetch and process",
+        examples=["https://example.com", "https://docs.python.org", "https://github.com"]
+    )
     
 class ScreenshotRequest(BaseModel):
-    url: str
-    screenshot_wait_for: Optional[float] = 2
-    output_path: Optional[str] = None
+    """Request body for the /screenshot endpoint."""
+    url: str = Field(
+        ..., 
+        description="Absolute http/https URL to capture as screenshot",
+        examples=["https://example.com", "https://github.com/user/repo", "https://docs.python.org"]
+    )
+    screenshot_wait_for: Optional[float] = Field(
+        2.0,
+        description="Seconds to wait before capturing screenshot (allows page to load)",
+        examples=[1.0, 2.0, 5.0],
+        ge=0.1,
+        le=30.0
+    )
+    output_path: Optional[str] = Field(
+        None,
+        description="Local file path to save screenshot (optional, returns base64 if not provided)",
+        examples=["/tmp/screenshot.png", "./output/page.png"]
+    )
 
 class PDFRequest(BaseModel):
-    url: str
-    output_path: Optional[str] = None
+    """Request body for the /pdf endpoint."""
+    url: str = Field(
+        ..., 
+        description="Absolute http/https URL to convert to PDF",
+        examples=["https://example.com", "https://docs.python.org", "https://github.com/user/repo"]
+    )
+    output_path: Optional[str] = Field(
+        None,
+        description="Local file path to save PDF (optional, returns base64 if not provided)", 
+        examples=["/tmp/document.pdf", "./output/page.pdf"]
+    )
 
 
 class JSEndpointRequest(BaseModel):
-    url: str
+    """Request body for the /execute_js endpoint."""
+    url: str = Field(
+        ..., 
+        description="Absolute http/https URL to execute JavaScript on",
+        examples=["https://example.com", "https://app.website.com", "https://dashboard.site.com"]
+    )
     scripts: List[str] = Field(
         ...,
-        description="List of separated JavaScript snippets to execute"
+        description="List of JavaScript code snippets to execute sequentially on the page",
+        examples=[
+            ["document.title"],
+            ["document.querySelector('h1').textContent", "window.location.href"],
+            ["(() => { return Array.from(document.querySelectorAll('a')).map(a => a.href); })()"]
+        ],
+        min_length=1
     )

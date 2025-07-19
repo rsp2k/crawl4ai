@@ -270,7 +270,13 @@ async def get_markdown(
 
 @app.post("/html")
 @limiter.limit(config["rate_limiting"]["default_limit"])
-@mcp_tool("html")
+@mcp_tool(
+    "html",
+    title="HTML Content Extractor", 
+    readOnlyHint=True,
+    openWorldHint=True,
+    idempotentHint=True
+)
 async def generate_html(
     request: Request,
     body: HTMLRequest,
@@ -293,7 +299,13 @@ async def generate_html(
 
 @app.post("/screenshot")
 @limiter.limit(config["rate_limiting"]["default_limit"])
-@mcp_tool("screenshot")
+@mcp_tool(
+    "screenshot",
+    title="Website Screenshot Generator",
+    readOnlyHint=True,
+    openWorldHint=True,
+    idempotentHint=True
+)
 async def generate_screenshot(
     request: Request,
     body: ScreenshotRequest,
@@ -322,7 +334,13 @@ async def generate_screenshot(
 
 @app.post("/pdf")
 @limiter.limit(config["rate_limiting"]["default_limit"])
-@mcp_tool("pdf")
+@mcp_tool(
+    "pdf",
+    title="Website PDF Generator",
+    readOnlyHint=True,
+    openWorldHint=True,
+    idempotentHint=True
+)
 async def generate_pdf(
     request: Request,
     body: PDFRequest,
@@ -348,7 +366,13 @@ async def generate_pdf(
 
 @app.post("/execute_js")
 @limiter.limit(config["rate_limiting"]["default_limit"])
-@mcp_tool("execute_js")
+@mcp_tool(
+    "execute_js",
+    title="JavaScript Executor",
+    readOnlyHint=False,
+    openWorldHint=True,
+    destructiveHint=True
+)
 async def execute_js(
     request: Request,
     body: JSEndpointRequest,
@@ -441,7 +465,13 @@ async def metrics():
 
 @app.post("/crawl")
 @limiter.limit(config["rate_limiting"]["default_limit"])
-@mcp_tool("crawl")
+@mcp_tool(
+    "crawl",
+    title="Multi-URL Web Crawler",
+    readOnlyHint=True,
+    openWorldHint=True,
+    idempotentHint=True
+)
 async def crawl(
     request: Request,
     crawl_request: CrawlRequest,
@@ -529,17 +559,41 @@ def chunk_doc_sections(doc: str) -> List[str]:
 
 @app.get("/ask")
 @limiter.limit(config["rate_limiting"]["default_limit"])
-@mcp_tool("ask")
+@mcp_tool(
+    "ask",
+    title="Crawl4AI Knowledge Assistant",
+    readOnlyHint=True,
+    openWorldHint=False,
+    idempotentHint=True
+)
 async def get_context(
     request: Request,
     _td: Dict = Depends(token_dep),
-    context_type: str = Query("all", regex="^(code|doc|all)$"),
+    context_type: str = Query(
+        "all",
+        regex="^(code|doc|all)$",
+        description="Type of context to retrieve: 'code' for source code, 'doc' for documentation, 'all' for both",
+        examples=["all", "doc", "code"]
+    ),
     query: Optional[str] = Query(
-        None, description="search query to filter chunks"),
+        None, 
+        description="Search query to filter content using BM25 algorithm",
+        examples=["async crawling", "browser configuration", "extraction strategies"]
+    ),
     score_ratio: float = Query(
-        0.5, ge=0.0, le=1.0, description="min score as fraction of max_score"),
+        0.5, 
+        ge=0.0, 
+        le=1.0, 
+        description="Minimum score as fraction of maximum score for filtering results",
+        examples=[0.3, 0.5, 0.8]
+    ),
     max_results: int = Query(
-        20, ge=1, description="absolute cap on returned chunks"),
+        20, 
+        ge=1, 
+        le=100,
+        description="Maximum number of results to return",
+        examples=[5, 10, 20, 50]
+    ),
 ):
     """
     This end point is design for any questions about Crawl4ai library. It returns a plain text markdown with extensive information about Crawl4ai. 
