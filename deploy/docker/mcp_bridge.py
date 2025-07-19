@@ -114,7 +114,12 @@ def attach_mcp(
 
     # helpers for JSON‑Schema
     def _schema(model: type[BaseModel] | None) -> dict:
-        return {"type": "object"} if model is None else model.model_json_schema()
+        if model is None:
+            return {"type": "object"}
+        
+        # Generate schema using field names (not aliases) for better MCP tool discovery
+        schema = model.model_json_schema(by_alias=False)
+        return schema
 
     def _body_model(fn: Callable) -> type[BaseModel] | None:
         for p in inspect.signature(fn).parameters.values():
