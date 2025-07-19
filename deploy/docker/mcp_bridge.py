@@ -249,11 +249,12 @@ def attach_mcp(
         messages = []
         if isinstance(prompt_data, dict) and "messages" in prompt_data:
             for msg in prompt_data["messages"]:
-                content = [t.TextContent(type="text", text=msg["content"])]
+                # Create a single TextContent object, not a list
+                content = t.TextContent(type="text", text=msg["content"])
                 messages.append(t.PromptMessage(role=msg["role"], content=content))
         else:
             # Fallback for simple string prompts
-            content = [t.TextContent(type="text", text=str(prompt_data))]
+            content = t.TextContent(type="text", text=str(prompt_data))
             messages.append(t.PromptMessage(role="user", content=content))
         
         return t.GetPromptResult(messages=messages)
