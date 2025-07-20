@@ -283,7 +283,8 @@ def attach_mcp(
     
     rpc_adapter = TypeAdapter(JSONRPCMessage)
     
-    @app.api_route(f"{base}", methods=["POST", "GET"])
+    @app.post(f"{base}")
+    @app.get(f"{base}")
     async def _mcp_streamable_http(request: Request):
         """MCP Streamable HTTP transport endpoint per 2025-03-26 specification"""
         
