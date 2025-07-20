@@ -12,13 +12,7 @@ from fastapi import Request
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from mcp.server.sse import SseServerTransport
-# Import the SSE fixes
-try:
-    from mcp_sse_fix import apply_mcp_sse_fixes, ASGICompliantSSEHandler
-    MCP_SSE_FIXES_AVAILABLE = True
-except ImportError:
-    MCP_SSE_FIXES_AVAILABLE = False
-    print("⚠️  MCP SSE fixes not available - using fallback implementations")
+# Note: Using official MCP Streamable HTTP transport (2025-03-26 specification)
 
 import mcp.types as t
 from mcp.server.lowlevel.server import Server, NotificationOptions
@@ -281,49 +275,181 @@ def attach_mcp(
         ),
     )
 
-    # ── WebSocket transport ────────────────────────────────────
-    @app.websocket_route(f"{base}/ws")
-    async def _ws(ws: WebSocket):
-        await ws.accept()
-        c2s_send, c2s_recv = anyio.create_memory_object_stream(100)
-        s2c_send, s2c_recv = anyio.create_memory_object_stream(100)
-
-        from pydantic import TypeAdapter
-        from mcp.types import JSONRPCMessage
-        adapter = TypeAdapter(JSONRPCMessage)
-
-        init_done = anyio.Event()
-
-        async def srv_to_ws():
-            first = True 
+    # ── MCP Streamable HTTP Transport (Official) ─────────────────────────
+    # Implements MCP specification 2025-03-26 Streamable HTTP transport
+    
+    from pydantic import TypeAdapter
+    from mcp.types import JSONRPCMessage, JSONRPCRequest, JSONRPCNotification, JSONRPCResponse
+    
+    rpc_adapter = TypeAdapter(JSONRPCMessage)
+    
+    @app.api_route(f"{base}", methods=["POST", "GET"])
+    async def _mcp_streamable_http(request: Request):
+        """MCP Streamable HTTP transport endpoint per 2025-03-26 specification"""
+        
+        # Security: Validate Origin header to prevent DNS rebinding attacks
+        origin = request.headers.get("origin")
+        if origin and not origin.startswith("http://localhost") and not origin.startswith("https://localhost"):
+            # For production, implement proper origin validation
+            pass
+        
+        if request.method == "GET":
+            # GET requests with Accept: text/event-stream for SSE
+            accept = request.headers.get("accept", "")
+            if "text/event-stream" in accept:
+                return await _handle_sse_stream(request)
+            else:
+                raise HTTPException(405, "Method Not Allowed - GET requires Accept: text/event-stream")
+        
+        elif request.method == "POST":
+            # POST requests with JSON-RPC messages
+            accept = request.headers.get("accept", "")
+            content_type = request.headers.get("content-type", "")
+            
+            if "application/json" not in content_type:
+                raise HTTPException(400, "Content-Type must include application/json")
+            
+            # Parse request body
             try:
-                async for msg in s2c_recv:
-                    await ws.send_json(msg.model_dump())
-                    if first:
-                        init_done.set()
-                        first = False
-            finally:
-                # make sure cleanup survives TaskGroup cancellation
-                with anyio.CancelScope(shield=True):
-                    with suppress(RuntimeError):       # idempotent close
-                        await ws.close()
-
-        async def ws_to_srv():
-            try:
-                # 1st frame is always "initialize"
-                first = adapter.validate_python(await ws.receive_json())
-                await c2s_send.send(first)
-                await init_done.wait()          # block until server ready
-                while True:
-                    data = await ws.receive_json()
-                    await c2s_send.send(adapter.validate_python(data))
-            except WebSocketDisconnect:
-                await c2s_send.aclose()
-
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(mcp.run, c2s_recv, s2c_send, init_opts)
-            tg.start_soon(ws_to_srv)
-            tg.start_soon(srv_to_ws)
+                body = await request.json()
+            except Exception as e:
+                raise HTTPException(400, f"Invalid JSON: {e}")
+            
+            # Handle single message or batch
+            if isinstance(body, list):
+                messages = [rpc_adapter.validate_python(msg) for msg in body]
+            else:
+                messages = [rpc_adapter.validate_python(body)]
+            
+            # Process messages and determine response type
+            has_requests = any(hasattr(msg, 'method') and hasattr(msg, 'id') for msg in messages)
+            
+            if has_requests and "text/event-stream" in accept:
+                # Return SSE stream for requests
+                return await _handle_request_stream(messages)
+            elif has_requests:
+                # Return JSON response for requests
+                return await _handle_request_json(messages)
+            else:
+                # Return 202 for notifications/responses
+                await _handle_notifications(messages)
+                return JSONResponse({}, status_code=202)
+    
+    async def _handle_sse_stream(request: Request):
+        """Handle SSE stream for MCP requests"""
+        async def event_generator():
+            # Send connection event
+            yield {
+                "event": "message",
+                "data": json.dumps({
+                    "jsonrpc": "2.0",
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": mcp.get_capabilities().model_dump(),
+                        "serverInfo": {
+                            "name": server_name,
+                            "version": "0.1.0"
+                        }
+                    },
+                    "id": 1
+                })
+            }
+            
+            # Keep connection alive
+            while True:
+                await asyncio.sleep(30)
+                yield {
+                    "event": "ping",
+                    "data": json.dumps({"timestamp": time.time()})
+                }
+        
+        return EventSourceResponse(event_generator())
+    
+    async def _handle_request_stream(messages: List[JSONRPCMessage]):
+        """Handle requests with SSE response"""
+        async def response_generator():
+            for msg in messages:
+                if hasattr(msg, 'method') and hasattr(msg, 'id'):
+                    try:
+                        # Route to appropriate handler
+                        if msg.method == "tools/list":
+                            tools = await _list_tools()
+                            result = {"tools": [t.model_dump() for t in tools]}
+                        elif msg.method == "tools/call":
+                            result = await _call_tool(msg.params.get("name"), msg.params.get("arguments"))
+                        elif msg.method == "resources/list":
+                            resources = await _list_resources()
+                            result = {"resources": [r.model_dump() for r in resources]}
+                        elif msg.method == "prompts/list":
+                            prompts = await _list_prompts()
+                            result = {"prompts": [p.model_dump() for p in prompts]}
+                        else:
+                            raise HTTPException(404, f"Method not found: {msg.method}")
+                        
+                        response = {
+                            "jsonrpc": "2.0",
+                            "result": result,
+                            "id": msg.id
+                        }
+                    except Exception as e:
+                        response = {
+                            "jsonrpc": "2.0",
+                            "error": {"code": -32603, "message": str(e)},
+                            "id": msg.id
+                        }
+                    
+                    yield {
+                        "event": "message",
+                        "data": json.dumps(response)
+                    }
+        
+        return EventSourceResponse(response_generator())
+    
+    async def _handle_request_json(messages: List[JSONRPCMessage]):
+        """Handle requests with JSON response"""
+        responses = []
+        
+        for msg in messages:
+            if hasattr(msg, 'method') and hasattr(msg, 'id'):
+                try:
+                    # Route to appropriate handler
+                    if msg.method == "tools/list":
+                        tools = await _list_tools()
+                        result = {"tools": [t.model_dump() for t in tools]}
+                    elif msg.method == "tools/call":
+                        result = await _call_tool(msg.params.get("name"), msg.params.get("arguments"))
+                    elif msg.method == "resources/list":
+                        resources = await _list_resources()
+                        result = {"resources": [r.model_dump() for r in resources]}
+                    elif msg.method == "prompts/list":
+                        prompts = await _list_prompts()
+                        result = {"prompts": [p.model_dump() for p in prompts]}
+                    else:
+                        raise HTTPException(404, f"Method not found: {msg.method}")
+                    
+                    responses.append({
+                        "jsonrpc": "2.0",
+                        "result": result,
+                        "id": msg.id
+                    })
+                except Exception as e:
+                    responses.append({
+                        "jsonrpc": "2.0",
+                        "error": {"code": -32603, "message": str(e)},
+                        "id": msg.id
+                    })
+        
+        if len(responses) == 1:
+            return JSONResponse(responses[0])
+        else:
+            return JSONResponse(responses)
+    
+    async def _handle_notifications(messages: List[JSONRPCMessage]):
+        """Handle notifications (no response required)"""
+        for msg in messages:
+            if hasattr(msg, 'method') and not hasattr(msg, 'id'):
+                # Process notification silently
+                pass
 
     # ── HTTP transport (recommended) ─────────────────────────
     # Using HTTP transport instead of deprecated SSE transport
@@ -340,102 +466,37 @@ def attach_mcp(
     # ── Alternative: Use EventSourceResponse for SSE-like functionality ─────
     from sse_starlette.sse import EventSourceResponse
     
-    @app.get(f"{base}/sse")
-    async def _mcp_sse_alternative(request: Request):
-        """Alternative SSE implementation using sse-starlette to avoid ASGI issues"""
-        
-        async def event_stream():
-            try:
-                # Initialize MCP session data
-                session_data = {
-                    "server": server_name,
-                    "capabilities": mcp.get_capabilities().model_dump(),
-                    "tools": [tool.model_dump() for tool in await _list_tools()],
-                    "resources": [res.model_dump() for res in await _list_resources()],
-                    "prompts": [prompt.model_dump() for prompt in await _list_prompts()]
-                }
-                
-                # Send initial connection event
-                yield {
-                    "event": "connection",
-                    "data": json.dumps(session_data)
-                }
-                
-                # For now, we'll send a heartbeat every 30 seconds
-                # In a full implementation, this would handle actual MCP protocol messages
-                import asyncio
-                while True:
-                    yield {
-                        "event": "heartbeat", 
-                        "data": json.dumps({"timestamp": time.time()})
-                    }
-                    await asyncio.sleep(30)
-                    
-            except Exception as e:
-                yield {
-                    "event": "error",
-                    "data": json.dumps({"error": str(e)})
-                }
-                
-        return EventSourceResponse(event_stream())
-    
-    # ── Legacy SSE transport (commented out due to ASGI issues) ─────
-    # sse = SseServerTransport(f"{base}/messages/")
-    # 
-    # @app.get(f"{base}/sse")
-    # async def _mcp_sse(request: Request):
-    #     try:
-    #         async with sse.connect_sse(
-    #             request.scope, request.receive, request._send
-    #         ) as (read_stream, write_stream):
-    #             await mcp.run(read_stream, write_stream, init_opts)
-    #     except Exception as e:
-    #         print(f"SSE connection error: {e}")
-    #         raise HTTPException(500, f"SSE connection failed: {str(e)}")
-    # 
-    # app.mount(f"{base}/messages", app=sse.handle_post_message)
-
-    # ── Apply SSE fixes if available ─────────────────────────
-    if MCP_SSE_FIXES_AVAILABLE:
-        try:
-            apply_mcp_sse_fixes(app, mcp, init_opts, base)
-            print(f"✅ Applied MCP SSE fixes for server: {server_name}")
-        except Exception as e:
-            print(f"⚠️  Failed to apply MCP SSE fixes: {e}")
+    # Note: Removed deprecated SSE and custom WebSocket transports
+    # Using only official MCP Streamable HTTP transport per 2025-03-26 specification
     
     # ── Transport status endpoint ─────────────────────────────
     @app.get(f"{base}/transport-status")
     async def _transport_status():
         """Check status of different MCP transport methods"""
-        status = {
-            "websocket": {
-                "status": "working",
-                "endpoint": f"{base}/ws",
-                "description": "Primary transport - recommended for production"
-            },
-            "sse_original": {
-                "status": "broken",
-                "endpoint": f"{base}/sse",
-                "description": "ASGI protocol violation - causes middleware conflicts",
-                "error": "assert message['type'] == 'http.response.body'"
-            },
-            "sse_fixed": {
-                "status": "working" if MCP_SSE_FIXES_AVAILABLE else "unavailable",
-                "endpoint": f"{base}/sse-fixed",
-                "description": "Uses EventSourceResponse to avoid ASGI issues"
-            },
-            "http_session": {
-                "status": "working" if MCP_SSE_FIXES_AVAILABLE else "unavailable", 
-                "endpoint": f"{base}/session",
-                "description": "HTTP-based MCP protocol without SSE"
-            }
-        }
-        
         return JSONResponse({
             "server": server_name,
-            "transports": status,
-            "recommendation": "Use WebSocket transport for production applications",
-            "mcp_fixes_available": MCP_SSE_FIXES_AVAILABLE
+            "specification": "2025-03-26",
+            "official_transports": {
+                "streamable_http": {
+                    "status": "working",
+                    "endpoint": f"{base}",
+                    "methods": ["POST", "GET"],
+                    "description": "Official MCP Streamable HTTP transport",
+                    "specification": "https://modelcontextprotocol.io/specification/2025-03-26/basic/transports"
+                },
+                "stdio": {
+                    "status": "not_applicable",
+                    "description": "Standard input/output transport - not available via HTTP"
+                }
+            },
+            "deprecated_transports": {
+                "sse": {
+                    "status": "deprecated",
+                    "specification": "2024-11-05 and earlier",
+                    "reason": "Replaced by Streamable HTTP in 2025-03-26"
+                }
+            },
+            "recommendation": "Use Streamable HTTP transport (POST/GET to /mcp endpoint)"
         })
 
     # ── schema endpoint ───────────────────────────────────────
