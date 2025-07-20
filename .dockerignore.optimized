@@ -1,149 +1,48 @@
-# =====================================
-# OPTIMIZED .dockerignore FOR FASTER BUILDS
-# =====================================
+# SAFE Docker ignore - only excludes obvious development files
+# Keeps all files needed for package installation
 
 # Version control
 .git/
 .gitignore
-.gitattributes
 
-# Development files
+# Virtual environments  
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Development tools
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# Documentation
-*.md
-docs/
-README*
-CHANGELOG*
-LICENSE*
-
-# Test files (unless needed)
-tests/
-test_*
-*_test.py
+# Test artifacts
 .pytest_cache/
 .coverage
 htmlcov/
 
-# CI/CD files
-.github/
-.gitlab-ci.yml
-.travis.yml
-Jenkinsfile
-
-# Python cache and build artifacts
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# IDEs and editors
-.vscode/
-.idea/
-*.sublime-*
-.vimrc
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# CI/CD (keep our optimized workflow)
+# .github/
 
 # Temporary files
 *.tmp
-*.temp
 *.log
-*.cache
+.DS_Store
+Thumbs.db
 
-# Docker files (except the one we're using)
-Dockerfile.dev
-Dockerfile.test
-docker-compose.override.yml
-docker-compose.dev.yml
+# Large directories that aren't needed
+tests/
+docs/
 
-# Local configuration
-.env.local
-.env.development
-.env.test
-.env.production
-config.local.*
-
-# Jupyter notebooks (if not needed in container)
-*.ipynb
-.ipynb_checkpoints/
-
-# Data files (if large and not needed)
-*.csv
-*.json
-*.xml
-data/
-datasets/
-
-# Model files (if downloaded at runtime)
-models/
-*.bin
-*.onnx
-*.pkl
-*.joblib
-
-# Crawl4AI specific excludes
-.crawl4ai/
-*.crawl4ai
-crawl4ai.log
-
-# Node.js (if any)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Large media files
-*.mp4
-*.avi
-*.mkv
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.pdf
-
-# Backup files
-*.bak
-*.backup
-*.old
-
-# Keep only essential files for the build
+# Keep everything else including:
+# - README.md (required by setup.py)
+# - pyproject.toml (required for build)  
+# - All source code files
+# - requirements.txt files
