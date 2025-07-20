@@ -5,7 +5,6 @@ from .config import (
     DEFAULT_PROVIDER_API_KEY,
     MIN_WORD_THRESHOLD,
     IMAGE_DESCRIPTION_MIN_WORD_THRESHOLD,
-    PROVIDER_MODELS,
     PROVIDER_MODELS_PREFIXES,
     SCREENSHOT_HEIGHT_TRESHOLD,
     PAGE_TIMEOUT,
@@ -14,17 +13,17 @@ from .config import (
 )
 
 from .user_agent_generator import UAGen, ValidUAGenerator  # , OnlineUAGenerator
-from .extraction_strategy import ExtractionStrategy, LLMExtractionStrategy
+from .extraction_strategy import ExtractionStrategy
 from .chunking_strategy import ChunkingStrategy, RegexChunking
 
 from .markdown_generation_strategy import MarkdownGenerationStrategy, DefaultMarkdownGenerator
-from .content_scraping_strategy import ContentScrapingStrategy, WebScrapingStrategy, LXMLWebScrapingStrategy
+from .content_scraping_strategy import ContentScrapingStrategy, LXMLWebScrapingStrategy
 from .deep_crawling import DeepCrawlStrategy
 
 from .cache_context import CacheMode
 from .proxy_strategy import ProxyRotationStrategy
 
-from typing import Union, List
+from typing import List
 import inspect
 from typing import Any, Dict, Optional
 from enum import Enum

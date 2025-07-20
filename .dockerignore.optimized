@@ -1,0 +1,48 @@
+# SAFE Docker ignore - only excludes obvious development files
+# Keeps all files needed for package installation
+
+# Version control
+.git/
+.gitignore
+
+# Virtual environments  
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Development tools
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# CI/CD (keep our optimized workflow)
+# .github/
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# Large directories that aren't needed
+tests/
+docs/
+
+# Keep everything else including:
+# - README.md (required by setup.py)
+# - pyproject.toml (required for build)  
+# - All source code files
+# - requirements.txt files

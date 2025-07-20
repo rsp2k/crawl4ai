@@ -10,11 +10,10 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Set, Tuple, Any, Union
 from dataclasses import dataclass, field
 import asyncio
-import pickle
 import os
 import json
 import math
-from collections import defaultdict, Counter
+from collections import defaultdict
 import re
 from pathlib import Path
 
@@ -665,22 +664,22 @@ class EmbeddingStrategy(CrawlStrategy):
         
     async def map_query_semantic_space(self, query: str, n_synthetic: int = 10) -> Any:
         """Generate a point cloud representing the semantic neighborhood of the query"""
-        from .utils import perform_completion_with_backoff
         
         # Generate more variations than needed for train/val split
-        n_total = int(n_synthetic * 1.3)  # Generate 30% more for validation
+        # n_total = int(n_synthetic * 1.3)  # Generate 30% more for validation (currently unused)
         
-        # Generate variations using LLM
-        prompt = f"""Generate {n_total} variations of this query that explore different aspects: '{query}'
-        
-        These should be queries a user might ask when looking for similar information.
-        Include different phrasings, related concepts, and specific aspects.
-        
-        Return as a JSON array of strings."""
-        
+        # Generate variations using LLM (currently disabled)
+        # TODO: Implement LLM-based query generation
+        # prompt = f"""Generate {n_total} variations of this query that explore different aspects: '{query}'
+        # 
+        # These should be queries a user might ask when looking for similar information.
+        # Include different phrasings, related concepts, and specific aspects.
+        # 
+        # Return as a JSON array of strings."""
+        # 
         # Use the LLM for query generation
-        provider = self.llm_config.get('provider', 'openai/gpt-4o-mini') if self.llm_config else 'openai/gpt-4o-mini'
-        api_token = self.llm_config.get('api_token') if self.llm_config else None
+        # provider = self.llm_config.get('provider', 'openai/gpt-4o-mini') if self.llm_config else 'openai/gpt-4o-mini'
+        # api_token = self.llm_config.get('api_token') if self.llm_config else None
         
         # response = perform_completion_with_backoff(
         #     provider=provider,
@@ -808,7 +807,7 @@ class EmbeddingStrategy(CrawlStrategy):
         kb_embeddings: Any
     ) -> List[Tuple[Link, float]]:
         """Select links that most efficiently fill the gaps"""
-        from .utils import cosine_distance, cosine_similarity, get_text_embeddings
+        from .utils import cosine_distance, get_text_embeddings
         
         import hashlib
         
@@ -1578,7 +1577,7 @@ class AdaptiveCrawler:
             total_words = sum(self.state.term_frequencies.values())
             unique_terms = len(self.state.term_frequencies)
             
-            print(f"\n[*] Content Statistics:")
+            print("\n[*] Content Statistics:")
             print(f"  Total Content: {total_content_length:,} characters")
             print(f"  Total Words: {total_words:,}")
             print(f"  Unique Terms: {unique_terms:,}")
@@ -1588,13 +1587,13 @@ class AdaptiveCrawler:
             # Strategy-specific output
             if isinstance(self.strategy, EmbeddingStrategy):
                 # Semantic coverage for embedding strategy
-                print(f"\n[*] Semantic Coverage Analysis:")
+                print("\n[*] Semantic Coverage Analysis:")
                 print(f"  Average Min Distance: {self.state.metrics.get('avg_min_distance', 0):.3f}")
                 print(f"  Avg Close Neighbors (< 0.3): {self.state.metrics.get('avg_close_neighbors', 0):.1f}")
                 print(f"  Avg Very Close Neighbors (< 0.2): {self.state.metrics.get('avg_very_close_neighbors', 0):.1f}")
                 
                 # Confidence metrics
-                print(f"\n[*] Confidence Metrics:")
+                print("\n[*] Confidence Metrics:")
                 if self.is_sufficient:
                     if use_rich:
                         console.print(f"  Overall Confidence: {self.confidence:.2%} [green][VALIDATED][/green]")
@@ -1611,7 +1610,7 @@ class AdaptiveCrawler:
                 
             else:
                 # Query coverage for statistical strategy
-                print(f"\n[*] Query Coverage:")
+                print("\n[*] Query Coverage:")
                 query_terms = self.strategy._tokenize(self.state.query.lower())
                 for term in query_terms:
                     tf = self.state.term_frequencies.get(term, 0)
@@ -1628,7 +1627,7 @@ class AdaptiveCrawler:
                             print(f"  '{term}': [X] not found")
                 
                 # Confidence metrics
-                print(f"\n[*] Confidence Metrics:")
+                print("\n[*] Confidence Metrics:")
                 status = "[OK]" if self.is_sufficient else "[!!]"
                 if use_rich:
                     status_colored = "[green][OK][/green]" if self.is_sufficient else "[red][!!][/red]"
@@ -1642,7 +1641,7 @@ class AdaptiveCrawler:
             # Crawl efficiency
             if self.state.new_terms_history:
                 avg_new_terms = sum(self.state.new_terms_history) / len(self.state.new_terms_history)
-                print(f"\n[*] Crawl Efficiency:")
+                print("\n[*] Crawl Efficiency:")
                 print(f"  Avg New Terms per Page: {avg_new_terms:.1f}")
                 print(f"  Information Saturation: {self.state.metrics.get('saturation', 0):.2%}")
                 
@@ -1693,7 +1692,7 @@ class AdaptiveCrawler:
                     if self.state.kb_embeddings is not None:
                         print(f"  Knowledge Embeddings: {self.state.kb_embeddings.shape}")
                     else:
-                        print(f"  Knowledge Embeddings: None")
+                        print("  Knowledge Embeddings: None")
                     print(f"  Semantic Gaps: {len(self.state.semantic_gaps)}")
                     print(f"  Coverage Achievement: {self.confidence:.2%}")
                     
