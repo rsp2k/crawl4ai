@@ -466,8 +466,56 @@ def attach_mcp(
     # ── Alternative: Use EventSourceResponse for SSE-like functionality ─────
     from sse_starlette.sse import EventSourceResponse
     
-    # Note: Removed deprecated SSE and custom WebSocket transports
-    # Using only official MCP Streamable HTTP transport per 2025-03-26 specification
+    # ── Legacy SSE endpoint for backward compatibility ─────────────────────────
+    @app.get(f"{base}/sse")
+    async def _mcp_sse_legacy(request: Request):
+        """Legacy SSE endpoint for backward compatibility with existing MCP clients
+        
+        WARNING: This endpoint is deprecated as of MCP specification 2025-03-26.
+        New clients should use the Streamable HTTP transport at POST/GET /mcp
+        """
+        
+        async def event_stream():
+            try:
+                # Send deprecation warning
+                yield {
+                    "event": "warning",
+                    "data": json.dumps({
+                        "message": "SSE transport deprecated in MCP 2025-03-26. Use Streamable HTTP at /mcp",
+                        "specification": "https://modelcontextprotocol.io/specification/2025-03-26/basic/transports"
+                    })
+                }
+                
+                # Initialize MCP session data for backward compatibility
+                session_data = {
+                    "server": server_name,
+                    "capabilities": mcp.get_capabilities().model_dump(),
+                    "tools": [tool.model_dump() for tool in await _list_tools()],
+                    "resources": [res.model_dump() for res in await _list_resources()],
+                    "prompts": [prompt.model_dump() for prompt in await _list_prompts()]
+                }
+                
+                # Send initial connection event
+                yield {
+                    "event": "connection",
+                    "data": json.dumps(session_data)
+                }
+                
+                # Send periodic heartbeat to keep connection alive
+                while True:
+                    yield {
+                        "event": "heartbeat", 
+                        "data": json.dumps({"timestamp": time.time()})
+                    }
+                    await asyncio.sleep(30)
+                    
+            except Exception as e:
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": str(e)})
+                }
+                
+        return EventSourceResponse(event_stream())
     
     # ── Transport status endpoint ─────────────────────────────
     @app.get(f"{base}/transport-status")
@@ -489,14 +537,16 @@ def attach_mcp(
                     "description": "Standard input/output transport - not available via HTTP"
                 }
             },
-            "deprecated_transports": {
+            "legacy_transports": {
                 "sse": {
-                    "status": "deprecated",
+                    "status": "working_deprecated",
+                    "endpoint": f"{base}/sse",
                     "specification": "2024-11-05 and earlier",
-                    "reason": "Replaced by Streamable HTTP in 2025-03-26"
+                    "description": "Legacy SSE transport - maintained for backward compatibility",
+                    "warning": "Deprecated in MCP 2025-03-26. Migrate to Streamable HTTP."
                 }
             },
-            "recommendation": "Use Streamable HTTP transport (POST/GET to /mcp endpoint)"
+            "recommendation": "Use Streamable HTTP transport (POST/GET to /mcp). Legacy SSE (/mcp/sse) available for compatibility."
         })
 
     # ── schema endpoint ───────────────────────────────────────
